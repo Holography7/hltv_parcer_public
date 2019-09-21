@@ -802,7 +802,7 @@ class Player():
             print('Data is corrupted.')
 
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches ion CS:GO from hltv.org. Current version: v. 0.2.5 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.6 alpha.')
 debug_mode = str(input('Enable debug mode? (Node: in debug mode you must confirm downloading data about match every time when it starting.) (Y/n): '))
 while (decision_made != True):
     if ((debug_mode == 'Y') or (debug_mode == 'y') or (debug_mode == '')):
@@ -853,14 +853,14 @@ else:
                     for j in range(len(another_match_1)):
                         match_status_got = get_match_status(another_match_1[j])
                         if (type(match_status_got) != int):
-                            if (match_status_got != 'Match over') or (match_status_got != 'Match deleted'):
+                            if (match_status_got != 'Match over') and (match_status_got != 'Match deleted') and (match_status_got != 'Match postponed'):
                                 another_matches.append(another_match_1[j])
                                 break
                 if (len(another_match_2) != 0):
                     for j in range(len(another_match_2)):
                         match_status_got = get_match_status(another_match_2[j])
                         if (type(match_status_got) != int):
-                            if (match_status_got != 'Match over') or (match_status_got != 'Match deleted'):
+                            if (match_status_got != 'Match over') and (match_status_got != 'Match deleted') and (match_status_got != 'Match postponed'):
                                 another_matches.append(another_match_2[j])
                                 break
                 if (len(another_matches) != 0):
