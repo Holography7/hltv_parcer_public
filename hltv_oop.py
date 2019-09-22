@@ -4,7 +4,7 @@ import time
 import sqlite3
 import datetime
 
-"""Global variables and functions""""
+"""Global variables and functions"""
 """Глобальные переменные и функции"""
 
 source_urls = ['https://www.hltv.org', '/matches', '/stats/players/', '?startDate=', '&endDate=']
