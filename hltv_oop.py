@@ -4,6 +4,7 @@ import time
 import sqlite3
 import datetime
 
+"""Global variables and functions""""
 """Глобальные переменные и функции"""
 
 source_urls = ['https://www.hltv.org', '/matches', '/stats/players/', '?startDate=', '&endDate=']
@@ -13,9 +14,12 @@ skip_confirm = False
 decision_made = False
 words = {False: 'continue', True: 'start'}
 
-def upload_html(url):
+def download_html(url):
+    """Page download function"""
     """Функция загрузки страницы"""
     try:
+        time.sleep(1) # If not do that, hltv.org get temporarily ban an IP address that is running the parser. (https://www.hltv.org/robots.txt)
+        # Если этого не сделать, hltv.org временно забанит IP адрес, где запущен этот парсер. (https://www.hltv.org/robots.txt)
         req = requests.get(url)
         if (req.status_code == 200):
             soup = BeautifulSoup(req.text, 'html.parser')
@@ -24,12 +28,13 @@ def upload_html(url):
             print('Error: ' + str(req_func.status_code) + '. Stopping parcer...')
             return req_func.status_code
     except requests.Timeout as e:
-        print('Error: timed out. Stopping parcer...')
+        print('Error: timed out. Stopping parcing this page...')
         print(str(e))
         return 408
 
 def check_float(str):
-    """Функция проверки строки числом"""
+    """Function to check whether a string is a floating point number"""
+    """Функция проверки является ли строка числом с плавающей точкой"""
     try:
         float(str)
         return True
@@ -37,22 +42,25 @@ def check_float(str):
         return False
 
 def get_match_status(link):
-    soup = upload_html(link) # https://www.hltv.org/matches/[number]/[matchName]
+    """Function getting information about the current status of the match (start time, live, over, postponed, deleted)"""
+    """Функция получения информации о текущем статусе матча (время начала, начат, окончен, перенесён, удалён)"""
+    soup = download_html(link) # https://www.hltv.org/matches/[number]/[matchName]
     if (type(soup) == int):
-        print('Error ' + soup + ' while uploading ' + link + '(HTML-error).')
+        print('Error ' + soup + ' while downloading ' + link + '(HTML-error).')
         return soup
     else:
-        """Обработка данных с загруженной страницы"""
         match_status = soup.find('div', class_='countdown').text
         return match_status
 
+"""Classes of objects"""
 """Классы объектов"""
 
 class Database():
+    """Database object"""
     """Объект БД"""
-#    __buffer = ''
 
     def __init__(self):
+        """Default database"""
         """БД по умолчанию"""
         self.__conn = sqlite3.connect("hltv_compact.db")
         self.__cursor = self.__conn.cursor()
@@ -61,6 +69,7 @@ class Database():
         self.__key_words = {6: 'match', 8: 'match', 28: 'player', 73: 'team'}
 
     def connect_another_name(self, db):
+        """Database with another name"""
         """БД с другим именем"""
         if (db.count('.db') == 0):
             db = db + '.db'
@@ -69,10 +78,12 @@ class Database():
         self.__cursor = self.__conn.cursor()
 
     def __del__(self):
+        """Closing database"""
         """Закрытие БД"""
         self.__conn.close()
 
     def create(self):
+        """Creating a new database"""
         """Создание новой БД"""
         self.__cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         list_tables = self.__cursor.fetchall()
@@ -80,19 +91,23 @@ class Database():
             for i in range(len(list_tables)):
                 list_tables[i] = list_tables[i][0]
         list_tables = tuple(list_tables)
+        """Checking current database"""
         """Проверка текущей БД"""
         check_tables = [False, False, False, False]
         for i in range(len(check_tables)):
             if (list_tables.count(self.__tables_tuple[i]) == 1):
                 check_tables[i] = True
+        """If the database does not have all the tables, they will be created again"""
         """Если БД не имеет всех таблиц, то они будут созданы заново"""
         if (check_tables != [True, True, True, True]):
             print('Creating database...')
+            """If the database has some tables, they are deleted"""
             """Если БД имеет некоторые таблицы, то они удаляются"""
             if (check_tables.count(True) != 0):
                 for i in range(len(check_tables)):
                     if (check_tables[i] == True):
                         self.__cursor.execute("DROP TABLE " + self.__tables_tuple[i] + ";")
+            """Creating tables"""
             """Создание таблиц"""
             self.__cursor.execute("""CREATE TABLE players
                               (ID int, Player text, Current_Team text,
@@ -120,9 +135,14 @@ class Database():
             print('All tables already created.')
 
     def write_data(self, data):
-        """Запись данных в БД: размер массива data может быть только = 6, 8, 28 или 73
-        Если данные уже присутствуют в таблице, они будут автоматически обновлены."""
+        """Writing data to the database: the size of the data tuple can only be 6, 8, 28, or 73.
+        The sizes of input tuples will be changed in future versions of the parser.
+        If the data is already exist in the table, it will be automatically updated."""
+        """Запись данных в БД: размер кортежа data может быть только = 6, 8, 28 или 73.
+        Размеры принимаемых кортежей будут изменены в будущих версиях парсера.
+        Если данные уже существуют в таблице, они будут автоматически обновлены."""
         if ((len(data) == 6) or (len(data) == 8) or (len(data) == 28) or (len(data) == 73)):
+            """Checking the availability of the data received."""
             """Проверка наличия получемых данных."""
             self.__cursor.execute("SELECT Link FROM " + self.__tables_db[len(data)] + ";")
             Links = self.__cursor.fetchall()
@@ -132,7 +152,8 @@ class Database():
                 print('This ' + self.__key_words[len(data)] + ' already exist. Data will be updated...')
                 self.update_data(data)
             else:
-                """Вычисление ID"""
+                """Search last ID"""
+                """Поиск последнего ID"""
                 self.__cursor.execute("SELECT ID FROM " + self.__tables_db[len(data)] + " ORDER BY ID DESC;")
                 last = self.__cursor.fetchall()
                 if (last == []):
@@ -149,13 +170,16 @@ class Database():
                     if (last_2 > last):
                         last = last_2
                 last = str(last)
+                """Preparing data for writing"""
                 """Подготовка данных для записи"""
                 here_data = [last]
                 here_data.extend(data)
                 if (len(data) == 6):
+                    """Writing of the upcoming match."""
                     """Запись предстоящего матча."""
                     self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?);", here_data)
                 elif (len(data) == 8):
+                    """Writing of the finished match."""
                     """Запись оконченного матча."""
                     self.__cursor.execute("SELECT ID FROM matches_upcoming WHERE Link = '" + here_data[8] + "';")
                     last = self.__cursor.fetchall()
@@ -164,9 +188,11 @@ class Database():
                     here_data.extend(data)
                     self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", here_data)
                 elif (len(data) == 28):
+                    """Writing player statistics."""
                     """Запись статистики игрока."""
                     self.__cursor.execute("INSERT INTO players VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", here_data)
                 elif (len(data) == 73):
+                    """Writing team statistics."""
                     """Запись статистики команды."""
                     self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", here_data)
                 self.__conn.commit()
@@ -174,30 +200,42 @@ class Database():
             print('Error 5173.a: Size of "data" not a 6, 8, 28 or 73; data is not added into database.')
 
     def update_data(self, data):
-        """Обновление данных в БД: размер массива data может быть только = 6, 8, 28 или 73.
+        """Updating data in the database: the size of the data tuple can only be = 6, 8, 28, or 73.
+        The sizes of accepted tuples will be changed in future versions of the parser.
+        The definition of the record, the data of which will be updated, is carried out by checking the coincidence of references.
+        Updating is carried out by deleting the old record and adding a new one with the preservation of the ID."""
+        """Обновление данных в БД: размер кортежа data может быть только = 6, 8, 28 или 73.
+        Размеры принимаемых кортежей будут изменены в будущих версиях парсера.
         Определение записи, данные которой будут обновляться, осуществляется проверкой совпадения ссылок.
-        Обновление осуществляется путём удаления старой записи и добавлением новой с сохранением id."""
+        Обновление осуществляется путём удаления старой записи и добавлением новой с сохранением ID."""
         if ((len(data) == 6) or (len(data) == 8) or (len(data) == 28) or (len(data) == 73)):
+            """Search for updated data."""
             """Поиск обновляемых данных."""
             self.__cursor.execute("SELECT ID FROM " + self.__tables_db[len(data)] + " WHERE Link = '" + data[len(data)-1] + "';")
             id = self.__cursor.fetchall()
             if (id != []):
+                """Preparing data for update"""
                 """Подготовка данных для обновления"""
                 new_data = [id[0][0]]
                 new_data.extend(data)
+                """Delete old record"""
                 """Удаление старой записи"""
                 err = self.delete_data(self.__tables_db[len(data)], id[0][0])
                 if (err == 200):
                     if (len(data) == 6):
+                        """Update data about the upcoming match."""
                         """Обновление данных о предстоящем матче."""
                         self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?);", new_data)
                     elif (len(data) == 8):
+                        """Update data about the finished match."""
                         """Обновление данных об оконченном матче."""
                         self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", new_data)
                     elif (len(data) == 28):
+                        """Update player statistics."""
                         """Обновление статистики игрока."""
                         self.__cursor.execute("INSERT INTO players VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", new_data)
                     elif (len(data) == 73):
+                        """Update team statistics."""
                         """Обновление статистики команды."""
                         self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", new_data)
                     self.__conn.commit()
@@ -209,7 +247,9 @@ class Database():
             print('Error 5173.b: Size of "data" not a 6, 8, 28 or 73; data is not updated.')
 
     def delete_data(self, table, id):
-        """Удаление данных из БД по id."""
+        """Delete data from the database by ID."""
+        """Удаление данных из БД по ID."""
+        """Verify that entered the parameters correctly."""
         """Проверка правильности ввода параметров."""
         if (self.__tables_tuple.count(table) == 1):
             if (str(id).isdigit()):
@@ -231,7 +271,9 @@ class Database():
             return 6461
 
     def delete_table_data(self, table):
+        """Delete data from the database. This method clears the table fully."""
         """Удаление данных из БД. Данный метод очищает всю таблицу."""
+        """Verify that you entered the parameters correctly."""
         """Проверка правильности ввода параметров."""
         if (self.__tables_tuple.count(table) == 1):
             """Очистка таблицы"""
@@ -244,6 +286,8 @@ class Database():
             return 6461
 
     def get_urls_upcomig_matches(self):
+        """Getting all links of the upcoming matches from database."""
+        """Получение всех ссылок предстоящих матчей из БД."""
         self.__cursor.execute("SELECT Link FROM matches_upcoming;")
         data = self.__cursor.fetchall()
         if (data != []):
@@ -255,6 +299,8 @@ class Database():
             return data
 
     def get_id_upcoming_match(self, link):
+        """Getting upcoming match by ID."""
+        """Получение предстоящего матча по ID."""
         self.__cursor.execute("SELECT ID FROM matches_upcoming WHERE Link = '" + link + "';")
         data = self.__cursor.fetchall()
         if (data != []):
@@ -266,6 +312,8 @@ class Database():
             return data
 
     def get_link_upcoming_match_by_team(self, team_name):
+        """Getting the upcoming matches a certain team."""
+        """Получение предстоящих матчей определённой команды."""
         self.__cursor.execute('SELECT Link FROM matches_upcoming WHERE Team_1 = "' + team_name + '";')
         data = self.__cursor.fetchall()
         self.__cursor.execute('SELECT Link FROM matches_upcoming WHERE Team_2 = "' + team_name + '";')
@@ -280,10 +328,12 @@ class Database():
             return data
 
 class Map_stats():
-    """Объект статистики команды на карте"""
+    """Team statistics object on the certain map"""
+    """Объект статистики команды на определённой карте"""
 
     def __init__(self):
-        """Простая инициализация"""
+        """Default initialization"""
+        """Инициализация по умолчанию"""
         self.__times_played = 0
         self.__wins = 0
         self.__draws = 0
@@ -296,14 +346,15 @@ class Map_stats():
         self.__pistol_round_win_percent = 0
         self.__status = 0
 
-    def upload_data(self, link):
-        """Инициализация с конкретной ссылки"""
-        time.sleep(1)
-        soup = upload_html(link) # https://www.hltv.org/stats/teams/map/[mapNumber]/[number]/[teamName]
+    def download_data(self, link):
+        """Downloading data"""
+        """Загрузка данных"""
+        soup = download_html(link) # https://www.hltv.org/stats/teams/map/[mapNumber]/[number]/[teamName]
         if (type(soup) == int):
             print('Error ' + soup + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup
         else:
+            """Processing data from a downloaded page"""
             """Обработка данных с загруженной страницы"""
             table_rows_names = ('Times played', 'Wins / draws / losses', 'Total rounds played', 'Rounds won', 'Win percent', 'Pistol rounds', 'Pistol rounds won', 'Pistol round win percent')
             table = soup.find(class_='stats-rows standard-box')
@@ -318,9 +369,6 @@ class Map_stats():
             data_team_map = []
             for i in range(len(stats)):
                 if (i != 1):
-                    """if(stats[i] == '0.0%'): # Баг фикс. Возможно, он уже не требуется
-                        stats[i] = 0
-                    else:"""
                     stats[i] = float(stats[i])
                     if(stats[i].is_integer() == True):
                         stats[i] = int(stats[i])
@@ -329,6 +377,7 @@ class Map_stats():
                     for j in range(len(stats[i])):
                         stats[i][j] = int(stats[i][j])
                         data_team_map.append(stats[i][j])
+            """Assigning received data to object properties"""
             """Присвоение полученных данных свойствам объекта"""
             self.__times_played = data_team_map[0]
             self.__wins = data_team_map[1]
@@ -343,16 +392,20 @@ class Map_stats():
             self.__status = 200
 
     def get_data(self):
-        """Вывод свойств объекта"""
+        """Getting object properties"""
+        """Получение свойств объекта"""
         if (self.__status == 200) or (self.__status == 0):
             data = (self.__times_played, self.__wins, self.__draws, self.__losses, self.__total_rounds_played, self.__rounds_won, self.__win_percent, self.__pistol_rounds, self.__pistol_rounds_won, self.__pistol_round_win_percent)
             return data
         else:
             print('Data is corrupted.')
+            return self.__status
 
 class Match():
 
     def __init__(self):
+        """Default initialization"""
+        """Инициализация по умолчанию"""
         self.__team_1 = 'None'
         self.__team_2 = 'None'
         self.__date = 0
@@ -369,15 +422,16 @@ class Match():
         self.__links_team_1_players = 'None'
         self.__links_team_2_players = 'None'
 
-    def upload_data(self, link):
-        """Инициализация с конкретной ссылки"""
+    def download_data(self, link):
+        """Downloading data"""
+        """Загрузка данных"""
         print('Uploading match data...')
-        time.sleep(1)
-        soup = upload_html(link) # https://www.hltv.org/matches/[number]/[matchName]
+        soup = download_html(link) # https://www.hltv.org/matches/[number]/[matchName]
         if (type(soup) == int):
             print('Error ' + soup + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup
         else:
+            """Processing data from a downloaded page"""
             """Обработка данных с загруженной страницы"""
             match_status = soup.find('div', class_='countdown').text
             time_and_date_unix = soup.find('div', class_='time')['data-unix'] # Исходное время GTK +3
@@ -504,7 +558,8 @@ class Match():
                     self.__status = 200
 
     def get_data(self):
-        """Вывод свойств объекта"""
+        """Getting object properties"""
+        """Получение свойств объекта"""
         if (self.__status == 200) or (self.__status == 0):
             if ((self.__result_full == 'None') or (self.__result_maps == 'None')):
                 data = (self.__team_1, self.__team_2, self.__date, self.__format, self.__maps, self.__link)
@@ -518,7 +573,8 @@ class Match():
             return self.__status
 
     def get_links_teams(self):
-        """Вывод ссылок на команды"""
+        """Getting team links"""
+        """Получение ссылок на команды"""
         if (self.__status == 200) or (self.__status == 0):
             data = (self.__link_team_1, self.__link_team_2)
             return data
@@ -526,26 +582,27 @@ class Match():
             print('Data is corrupted.')
 
     def get_links_stats_teams(self):
-        """Вывод ссылок на статистики команд"""
+        """Getting team statistics links"""
+        """Получение ссылок на статистики команд"""
         if (self.__status == 200) or (self.__status == 0):
             data = (self.__link_team_1_stats, self.__link_team_2_stats)
             return data
         else:
             print('Data is corrupted.')
 
-    def get_links_stats_team_1_players(self):
-        """Вывод ссылок на статистики игроков команды 1"""
+    def get_links_stats_players(self, team_bool):
+        """Getting players statistics links"""
+        """Получение ссылок на статистики игроков"""
         if (self.__status == 200) or (self.__status == 0):
-            data = self.__links_team_1_players
-            return data
-        else:
-            print('Data is corrupted.')
-
-    def get_links_stats_team_2_players(self):
-        """Вывод ссылок на статистики игроков команды 2"""
-        if (self.__status == 200) or (self.__status == 0):
-            data = self.__links_team_2_players
-            return data
+            if (type(team_bool) == bool):
+                if (team_bool == True):
+                    data = self.__links_team_1_players
+                else:
+                    data = self.__links_team_2_players
+                return data
+            else:
+                print('Error 6001: getted variable not "bool".')
+                return 6001
         else:
             print('Data is corrupted.')
 
@@ -553,10 +610,12 @@ class Match():
         return self.__status
 
 class Team():
+    """Object team statistics"""
     """Объект полной статистики команды"""
 
     def __init__(self):
-        """Простая инициализация"""
+        """Default initialization"""
+        """Инициализация по умолчанию"""
         self.__team = 'None'
         self.__rating = 'unknown'
         self.__link = 'None'
@@ -569,15 +628,16 @@ class Team():
         self.__Vertigo = Map_stats()
         self.__status = 0
 
-    def upload_data(self, link_1, link_2):
-        """Инициализация с конкретных ссылок"""
+    def download_data(self, link_1, link_2):
+        """Downloading data"""
+        """Загрузка данных"""
         print('Uploading team data: step 1...')
-        time.sleep(1)
-        soup_1 = upload_html(link_1) # https://www.hltv.org/team/[Number team]/[Team name]
+        soup_1 = download_html(link_1) # https://www.hltv.org/team/[Number team]/[Team name]
         if (type(soup_1) == int):
             print('Error ' + soup_1 + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup_1
         else:
+            """Processing data from a downloaded page"""
             """Обработка данных с загруженной страницы"""
             self.__team = soup_1.find(class_='profile-team-name text-ellipsis').text
             rating = soup_1.find(class_='profile-team-stat')
@@ -589,13 +649,15 @@ class Team():
                 rating_text = 'unknown'
             self.__rating = rating_text
             self.__link = link_1
+            """Downloading data"""
+            """Загрузка данных"""
             print('Uploading team ' + self.__team + ' data: step 2...')
-            time.sleep(1)
-            soup_2 = upload_html(link_2) # https://www.hltv.org/stats/lineup/maps?lineup=[Number player 1]&lineup=[Number player 2]&lineup=[Number player 3]&lineup=[Number player 4]&lineup=[Number player 5]&minLineupMatch=3&startDate=[Date 3 month ago]&endDate=[Date today]
+            soup_2 = download_html(link_2) # https://www.hltv.org/stats/lineup/maps?lineup=[Number player 1]&lineup=[Number player 2]&lineup=[Number player 3]&lineup=[Number player 4]&lineup=[Number player 5]&minLineupMatch=3&startDate=[Date 3 month ago]&endDate=[Date today]
             if (type(soup_2) == int):
                 print('Error ' + soup_2 + ' while uploading ' + link + '(HTML-error).')
                 self.__status = soup_2
             else:
+                """Processing data from a downloaded page"""
                 """Обработка данных с загруженной страницы"""
                 list_maps = soup_2.find_all(class_='tabs standard-box')
                 if (len(list_maps) < 2):
@@ -615,40 +677,35 @@ class Team():
                             full_maps_urls.append(list_maps_urls[maps_names.index(must_maps[i])]['href'])
                         else:
                             full_maps_urls.append('0')
-                    """Инициализация статистики карт"""
+                    """Download statistics maps"""
+                    """Загрузка статистики карт"""
                     print('Uploading team ' + self.__team + ' data: step 3: map Dust 2...')
-                    self.__Dust_2 = Map_stats()
                     if (full_maps_urls[0] != '0'):
-                        self.__Dust_2.upload_data(source_urls[0] + full_maps_urls[0])
+                        self.__Dust_2.download_data(source_urls[0] + full_maps_urls[0])
                     print('Uploading team ' + self.__team + ' data: step 3: map Inferno...')
-                    self.__Inferno = Map_stats()
                     if (full_maps_urls[1] != '0'):
-                        self.__Inferno.upload_data(source_urls[0] + full_maps_urls[1])
+                        self.__Inferno.download_data(source_urls[0] + full_maps_urls[1])
                     print('Uploading team ' + self.__team + ' data: step 3: map Mirage...')
-                    self.__Mirage = Map_stats()
                     if (full_maps_urls[2] != '0'):
-                        self.__Mirage.upload_data(source_urls[0] + full_maps_urls[2])
+                        self.__Mirage.download_data(source_urls[0] + full_maps_urls[2])
                     print('Uploading team ' + self.__team + ' data: step 3: map Nuke...')
-                    self.__Nuke = Map_stats()
                     if (full_maps_urls[3] != '0'):
-                        self.__Nuke.upload_data(source_urls[0] + full_maps_urls[3])
+                        self.__Nuke.download_data(source_urls[0] + full_maps_urls[3])
                     print('Uploading team ' + self.__team + ' data: step 3: map Overpass...')
-                    self.__Overpass = Map_stats()
                     if (full_maps_urls[4] != '0'):
-                        self.__Overpass.upload_data(source_urls[0] + full_maps_urls[4])
+                        self.__Overpass.download_data(source_urls[0] + full_maps_urls[4])
                     print('Uploading team ' + self.__team + ' data: step 3: map Train...')
-                    self.__Train = Map_stats()
                     if (full_maps_urls[5] != '0'):
-                        self.__Train.upload_data(source_urls[0] + full_maps_urls[5])
+                        self.__Train.download_data(source_urls[0] + full_maps_urls[5])
                     print('Uploading team ' + self.__team + ' data: step 3: map Vertigo...')
-                    self.__Vertigo = Map_stats()
                     if (full_maps_urls[6] != '0'):
-                        self.__Vertigo.upload_data(source_urls[0] + full_maps_urls[6])
+                        self.__Vertigo.download_data(source_urls[0] + full_maps_urls[6])
                     print('Completed.')
                     self.__status = 200
 
     def get_data(self):
-        """Вывод свойств объекта"""
+        """Getting object properties"""
+        """Получение свойств объекта"""
         if (self.__status == 200) or (self.__status == 0):
             Dust_2_data = self.__Dust_2.get_data()
             Inferno_data = self.__Inferno.get_data()
@@ -675,10 +732,12 @@ class Team():
             return self.__status
 
 class Player():
+    """Object of individual player statistics"""
     """Объект индивидуальной статистики игрока"""
 
     def __init__(self):
-        """Простая инициализация"""
+        """Default initialization"""
+        """Инициализация по умолчанию"""
         self.__nickname = 'None'
         self.__current_team = 'None'
         self.__kills = 0
@@ -709,15 +768,16 @@ class Player():
         self.__link = 'None'
         self.__status = 0
 
-    def upload_data(self, link_1):
-        """Инициализация с конкретной ссылоки"""
+    def download_data(self, link_1):
+        """Downloading data"""
+        """Загрузка данных"""
         print('Uploading player data: step 1...')
-        time.sleep(1)
-        soup_1 = upload_html(link_1) # https://www.hltv.org/stats/players/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
+        soup_1 = download_html(link_1) # https://www.hltv.org/stats/players/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(soup_1) == int):
             print('Error ' + soup_1 + ' while uploading ' + link_1 + '(HTML-error).')
             self.__status = soup_1
         else:
+            """Processing data from a downloaded page"""
             """Обработка данных с загруженной страницы"""
             self.__nickname = soup_1.find('h1', class_='summaryNickname text-ellipsis').text
             team_current = soup_1.find('a', class_='a-reset text-ellipsis')
@@ -744,13 +804,15 @@ class Player():
                     self.__rating_2_0 = int(self.__rating_2_0)
                 tabs = soup_1.find_all('a', class_='stats-top-menu-item stats-top-menu-item-link')
                 link_2 = source_urls[0] + tabs[0]['href']
+                """Downloading data"""
+                """Загрузка данных"""
                 print('Uploading player ' + self.__nickname + ' data: step 2...')
-                time.sleep(1)
-                soup_2 = upload_html(link_2) # https://www.hltv.org/stats/players/individual/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
+                soup_2 = download_html(link_2) # https://www.hltv.org/stats/players/individual/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
                 if (type(soup_2) == int):
                     print('Error ' + soup_2 + ' while uploading ' + link_2 + '(HTML-error).')
                     self.__status = soup_2
                 else:
+                    """Processing data from a downloaded page"""
                     """Обработка данных с загруженной страницы"""
                     table_rows_names = ('Kills', 'Deaths', 'Kill / Death', 'Kill / Round', 'Rounds with kills', 'Kill - Death differenceK - D diff.', 'Total opening kills', 'Total opening deaths', 'Opening kill ratio', 'Opening kill rating', 'Team win percent after first kill', 'First kill in won rounds', '0 kill rounds', '1 kill rounds', '2 kill rounds', '3 kill rounds', '4 kill rounds', '5 kill rounds', 'Rifle kills', 'Sniper kills', 'SMG kills', 'Pistol kills', 'Grenade', 'Other')
                     rows = soup_2.find_all(class_='stats-row')
@@ -764,6 +826,8 @@ class Player():
                         rows[i] = float(rows[i])
                         if(rows[i].is_integer()):
                             rows[i] = int(rows[i])
+                    """Assigning received data to object properties"""
+                    """Присвоение полученных данных свойствам объекта"""
                     self.__kills = rows[0]
                     self.__deaths = rows[1]
                     self.__kill_per_death = rows[2]
@@ -794,15 +858,17 @@ class Player():
                 self.__status = 4313
 
     def get_data(self):
-        """Вывод свойств объекта"""
+        """Getting object properties"""
+        """Получение свойств объекта"""
         if (self.__status == 200) or (self.__status == 0):
             data = (self.__nickname, self.__current_team, self.__kills, self.__deaths, self.__kill_per_death, self.__kill_per_round, self.__rounds_with_kills, self.__kill_death_difference, self.__total_opening_kills, self.__total_opening_deaths, self.__opening_kill_ratio, self.__opening_kill_rating, self.__team_win_percent_after_first_kill, self.__first_kill_in_won_rounds, self.__0_kill_rounds, self.__1_kill_rounds, self.__2_kill_rounds, self.__3_kill_rounds, self.__4_kill_rounds, self.__5_kill_rounds, self.__rifle_kills, self.__sniper_kills, self.__smg_kills, self.__pistol_kills, self.__grenade, self.__other, self.__rating_2_0, self.__link)
             return data
         else:
             print('Data is corrupted.')
 
+"""Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.7 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.8 alpha.')
 DB = Database()
 DB.create()
 while (decision_made != True):
@@ -818,7 +884,7 @@ while (decision_made != True):
         decision_made = False
 decision_made = False
 print('Preparing list of matches...')
-soup_glob = upload_html('https://www.hltv.org/matches') # Эта часть кода будет реализована в будущем для загрузки всех предстоящих матчей
+soup_glob = download_html('https://www.hltv.org/matches') # Эта часть кода будет реализована в будущем для загрузки всех предстоящих матчей
 if (type(soup_glob) == int):
     print('Error ' + soup_glob + ' while uploading ' + link + '(HTML-error).')
     self.__status = soup_glob
@@ -835,10 +901,11 @@ else:
             for j in range(urls_upcoming_matches.count(exist_upcoming_matches[i])):
                 urls_upcoming_matches.remove(exist_upcoming_matches[i])
     print('Updating info about exist matches...')
+    """Update existing matches"""
     """Обновление существующих матчей"""
     for i in range(len(exist_upcoming_matches)):
         match = Match()
-        match.upload_data(exist_upcoming_matches[i])
+        match.download_data(exist_upcoming_matches[i])
         match_data = match.get_data()
         if (type(match_data) == tuple):
             if (len(match_data) == 6):
@@ -873,6 +940,7 @@ else:
                 DB.delete_data('matches_upcoming', id_match[0])
             elif (match_data == 1541):
                 print('This match not updated. Probably, it should delete.')
+    """Adding new matches"""
     """Добавление новых матчей"""
     print('Parcer ready to collecting new matches.')
     for i in range(len(urls_upcoming_matches)):
@@ -885,30 +953,33 @@ else:
             if ((start == 'Y') or (start == 'y') or (start == '')):
                 start_bool = False
                 decision_made = True
+                """Creating a match object and retrieving data from it"""
                 """Создание объекта матча и получение с него данных"""
                 match = Match()
-                match.upload_data(urls_upcoming_matches[i]) # Сюда нужно ввести ссылку на матч
+                match.download_data(urls_upcoming_matches[i]) # Сюда нужно ввести ссылку на матч
                 status_match = match.get_status()
                 if(status_match == 200):
                     match_data = match.get_data()
                     links_teams = match.get_links_teams()
                     links_stats_teams = match.get_links_stats_teams()
-                    links_stats_team_1_players = match.get_links_stats_team_1_players()
-                    links_stats_team_2_players = match.get_links_stats_team_2_players()
+                    links_stats_team_1_players = match.get_links_stats_players(True)
+                    links_stats_team_2_players = match.get_links_stats_players(False)
                     print(match_data)
+                    """Creating command objects and retrieving data from them"""
                     """Создание объектов команд и получение с них данных"""
                     team_1 = Team()
-                    team_1.upload_data(links_teams[0], links_stats_teams[0])
+                    team_1.download_data(links_teams[0], links_stats_teams[0])
                     team_1_data = team_1.get_data()
                     if (type(team_1_data) != int):
                         print(team_1_data)
                         print(len(team_1_data))
                         team_2 = Team()
-                        team_2.upload_data(links_teams[1], links_stats_teams[1])
+                        team_2.download_data(links_teams[1], links_stats_teams[1])
                         team_2_data = team_2.get_data()
                         if (type(team_2_data) != int):
                             print(team_2_data)
                             print(len(team_2_data))
+                            """Creating player objects and retrieving data from them"""
                             """Создание объектов игроков и получение с них данных"""
                             team_1_player_1 = Player()
                             team_1_player_2 = Player()
@@ -920,34 +991,34 @@ else:
                             team_2_player_3 = Player()
                             team_2_player_4 = Player()
                             team_2_player_5 = Player()
-                            team_1_player_1.upload_data(links_stats_team_1_players[0])
+                            team_1_player_1.download_data(links_stats_team_1_players[0])
                             team_1_player_1_data = team_1_player_1.get_data()
                             print(team_1_player_1_data)
-                            team_1_player_2.upload_data(links_stats_team_1_players[1])
+                            team_1_player_2.download_data(links_stats_team_1_players[1])
                             team_1_player_2_data = team_1_player_2.get_data()
                             print(team_1_player_2_data)
-                            team_1_player_3.upload_data(links_stats_team_1_players[2])
+                            team_1_player_3.download_data(links_stats_team_1_players[2])
                             team_1_player_3_data = team_1_player_3.get_data()
                             print(team_1_player_3_data)
-                            team_1_player_4.upload_data(links_stats_team_1_players[3])
+                            team_1_player_4.download_data(links_stats_team_1_players[3])
                             team_1_player_4_data = team_1_player_4.get_data()
                             print(team_1_player_4_data)
-                            team_1_player_5.upload_data(links_stats_team_1_players[4])
+                            team_1_player_5.download_data(links_stats_team_1_players[4])
                             team_1_player_5_data = team_1_player_5.get_data()
                             print(team_1_player_5_data)
-                            team_2_player_1.upload_data(links_stats_team_2_players[0])
+                            team_2_player_1.download_data(links_stats_team_2_players[0])
                             team_2_player_1_data = team_2_player_1.get_data()
                             print(team_2_player_1_data)
-                            team_2_player_2.upload_data(links_stats_team_2_players[1])
+                            team_2_player_2.download_data(links_stats_team_2_players[1])
                             team_2_player_2_data = team_2_player_2.get_data()
                             print(team_2_player_2_data)
-                            team_2_player_3.upload_data(links_stats_team_2_players[2])
+                            team_2_player_3.download_data(links_stats_team_2_players[2])
                             team_2_player_3_data = team_2_player_3.get_data()
                             print(team_2_player_3_data)
-                            team_2_player_4.upload_data(links_stats_team_2_players[3])
+                            team_2_player_4.download_data(links_stats_team_2_players[3])
                             team_2_player_4_data = team_2_player_4.get_data()
                             print(team_2_player_4_data)
-                            team_2_player_5.upload_data(links_stats_team_2_players[4])
+                            team_2_player_5.download_data(links_stats_team_2_players[4])
                             team_2_player_5_data = team_2_player_5.get_data()
                             print(team_2_player_5_data)
                             DB.write_data(match_data)
