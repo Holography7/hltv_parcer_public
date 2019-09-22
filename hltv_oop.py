@@ -802,9 +802,11 @@ class Player():
             print('Data is corrupted.')
 
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.6 alpha.')
-debug_mode = str(input('Enable debug mode? (Node: in debug mode you must confirm downloading data about match every time when it starting.) (Y/n): '))
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.7 alpha.')
+DB = Database()
+DB.create()
 while (decision_made != True):
+    debug_mode = str(input('Enable debug mode? (Node: in debug mode you must confirm downloading data about match every time when it starting.) (Y/n): '))
     if ((debug_mode == 'Y') or (debug_mode == 'y') or (debug_mode == '')):
         skip_confirm = False
         decision_made = True
@@ -821,7 +823,6 @@ if (type(soup_glob) == int):
     print('Error ' + soup_glob + ' while uploading ' + link + '(HTML-error).')
     self.__status = soup_glob
 else:
-    DB = Database()
     all_upcomig_matches = soup_glob.find(class_='upcoming-matches')
     list_upcoming_matches = all_upcomig_matches.find_all('a')
     urls_upcoming_matches = [source_urls[0] + list_upcoming_matches[i]['href'] for i in range(len(list_upcoming_matches))]
