@@ -519,38 +519,51 @@ class Match():
                         links_teams_stats = teams_stats.find_all(class_='team')
                         self.__link_team_1_stats = source_urls[0] + links_teams_stats[0].find('a')['href']
                         self.__link_team_2_stats = source_urls[0] + links_teams_stats[1].find('a')['href']
-                        lineups = soup.find('div', class_='lineups')
-                        players = lineups.find_all('td', class_='player')
+                        lineups = soup.find_all('div', class_='lineup standard-box')
+                        players_team_1_nicknames = lineups[0].find_all('div', class_='text-ellipsis')
+                        players_team_2_nicknames = lineups[1].find_all('div', class_='text-ellipsis')
+                        players_team_1_compare = lineups[0].find_all('div', class_='player-compare flagAlign')
+                        players_team_2_compare = lineups[1].find_all('div', class_='player-compare flagAlign')
+                        active_player_team_1_compare = lineups[0].find('div', class_='player-compare flagAlign active')
+                        active_player_team_2_compare = lineups[1].find('div', class_='player-compare flagAlign active')
+                        players_team_1_compare.append(active_player_team_1_compare)
+                        players_team_2_compare.append(active_player_team_2_compare)
                         date_today = datetime.date.isoformat(datetime.date.today())
                         delta_3_month_ago = datetime.timedelta(days=90)
                         date_3_month_ago = datetime.date.isoformat(datetime.date.today() - delta_3_month_ago)
                         self.__links_team_1_players = []
                         self.__links_team_2_players = []
-                        for i in range(5, 10):
-                            nickname = players[i].find(class_='text-ellipsis').text
+                        if (len(players_team_1_nicknames) < 5):
+                            print('In team_1 some players still unknown. Skipping...')
+                            self.__status = 1543
+                            return 1543
+                        if (len(players_team_2_nicknames) < 5):
+                            print('In team_2 some players still unknown. Skipping...')
+                            self.__status = 1543
+                            return 1543
+                        if (len(players_team_1_compare) < 5):
+                            print('In team_1 some players have not statistic page. Skipping...')
+                            self.__status = 1544
+                            return 1544
+                        if (len(players_team_2_compare) < 5):
+                            print('In team_2 some players have not statistic page. Skipping...')
+                            self.__status = 1544
+                            return 1544
+                        for i in range(5):
+                            nickname = players_team_1_nicknames[i].text
                             if (nickname == 'TBA'):
                                 print('In team_1 some players still unknown. Skipping...')
                                 self.__status = 1541
                                 return 1541
-                            id_player = players[i].find(class_='player-compare')
-                            if (id_player == None):
-                                print('In team_1 some players have not statistic page. Skipping...')
-                                self.__status = 1542
-                                return 1542
-                            id_player = id_player['data-player-id']
+                            id_player = players_team_1_compare[i]['data-player-id']
                             self.__links_team_1_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
-                        for i in range(15, 20):
-                            nickname = players[i].find(class_='text-ellipsis').text
+                        for i in range(5):
+                            nickname = players_team_2_nicknames[i].text
                             if (nickname == 'TBA'):
                                 print('In team_2 some players still unknown. Skipping...')
-                                self.__status = 1542
-                                return 1542
-                            id_player = players[i].find(class_='player-compare')
-                            if (id_player == None):
-                                print('In team_2 some players have not statistic page. Skipping...')
-                                self.__status = 1542
-                                return 1542
-                            id_player = id_player['data-player-id']
+                                self.__status = 1541
+                                return 1541
+                            id_player = players_team_2_compare[i]['data-player-id']
                             self.__links_team_2_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
                         self.__links_team_1_players = tuple(self.__links_team_1_players)
                         self.__links_team_2_players = tuple(self.__links_team_2_players)
@@ -868,11 +881,11 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.8 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.9 alpha.')
 DB = Database()
 DB.create()
 while (decision_made != True):
-    debug_mode = str(input('Enable debug mode? (Node: in debug mode you must confirm downloading data about match every time when it starting.) (Y/n): '))
+    debug_mode = str(input('Enable debug mode? (Note: in debug mode you must confirm downloading data about match every time when it starting.) (Y/n): '))
     if ((debug_mode == 'Y') or (debug_mode == 'y') or (debug_mode == '')):
         skip_confirm = False
         decision_made = True
