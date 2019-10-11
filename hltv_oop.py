@@ -25,8 +25,8 @@ def download_html(url):
             soup = BeautifulSoup(req.text, 'html.parser')
             return soup
         else:
-            print('Error: ' + str(req_func.status_code) + '. Stopping parcer...')
-            return req_func.status_code
+            print('Error: ' + str(req.status_code) + '. Stopping parcer...')
+            return req.status_code
     except requests.Timeout as e:
         print('Error: timed out. Stopping parcing this page...')
         print(str(e))
@@ -351,7 +351,7 @@ class Map_stats():
         """Загрузка данных"""
         soup = download_html(link) # https://www.hltv.org/stats/teams/map/[mapNumber]/[number]/[teamName]
         if (type(soup) == int):
-            print('Error ' + soup + ' while uploading ' + link + '(HTML-error).')
+            print('Error ' + str(soup) + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup
         else:
             """Processing data from a downloaded page"""
@@ -428,7 +428,7 @@ class Match():
         print('Uploading match data...')
         soup = download_html(link) # https://www.hltv.org/matches/[number]/[matchName]
         if (type(soup) == int):
-            print('Error ' + soup + ' while uploading ' + link + '(HTML-error).')
+            print('Error ' + str(soup) + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup
         else:
             """Processing data from a downloaded page"""
@@ -522,12 +522,12 @@ class Match():
                         lineups = soup.find_all('div', class_='lineup standard-box')
                         players_team_1_nicknames = lineups[0].find_all('div', class_='text-ellipsis')
                         players_team_2_nicknames = lineups[1].find_all('div', class_='text-ellipsis')
-                        players_team_1_compare = lineups[0].find_all('div', class_='player-compare flagAlign')
-                        players_team_2_compare = lineups[1].find_all('div', class_='player-compare flagAlign')
-                        active_player_team_1_compare = lineups[0].find('div', class_='player-compare flagAlign active')
-                        active_player_team_2_compare = lineups[1].find('div', class_='player-compare flagAlign active')
-                        players_team_1_compare.append(active_player_team_1_compare)
-                        players_team_2_compare.append(active_player_team_2_compare)
+                        players_team_1_compare = lineups[0].find_all('div', class_='player-compare')
+                        players_team_2_compare = lineups[1].find_all('div', class_='player-compare')
+                        for i in range(int(len(players_team_1_compare)/2-1), -1, -1):
+                            players_team_1_compare.pop(i)
+                        for i in range(int(len(players_team_2_compare)/2-1), -1, -1):
+                            players_team_2_compare.pop(i)
                         date_today = datetime.date.isoformat(datetime.date.today())
                         delta_3_month_ago = datetime.timedelta(days=90)
                         date_3_month_ago = datetime.date.isoformat(datetime.date.today() - delta_3_month_ago)
@@ -551,19 +551,27 @@ class Match():
                             return 1544
                         for i in range(5):
                             nickname = players_team_1_nicknames[i].text
-                            if (nickname == 'TBA'):
+                            if (nickname == 'TBA') or (nickname == 'TBD'):
                                 print('In team_1 some players still unknown. Skipping...')
                                 self.__status = 1541
                                 return 1541
                             id_player = players_team_1_compare[i]['data-player-id']
+                            if (id_player == 0):
+                                print('In team_1 some players still unknown. Skipping...')
+                                self.__status = 1541
+                                return 1541
                             self.__links_team_1_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
                         for i in range(5):
                             nickname = players_team_2_nicknames[i].text
-                            if (nickname == 'TBA'):
+                            if (nickname == 'TBA') or (nickname == 'TBD'):
                                 print('In team_2 some players still unknown. Skipping...')
                                 self.__status = 1541
                                 return 1541
                             id_player = players_team_2_compare[i]['data-player-id']
+                            if (id_player == 0):
+                                print('In team_2 some players still unknown. Skipping...')
+                                self.__status = 1541
+                                return 1541
                             self.__links_team_2_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
                         self.__links_team_1_players = tuple(self.__links_team_1_players)
                         self.__links_team_2_players = tuple(self.__links_team_2_players)
@@ -647,7 +655,7 @@ class Team():
         print('Uploading team data: step 1...')
         soup_1 = download_html(link_1) # https://www.hltv.org/team/[Number team]/[Team name]
         if (type(soup_1) == int):
-            print('Error ' + soup_1 + ' while uploading ' + link + '(HTML-error).')
+            print('Error ' + str(soup_1) + ' while uploading ' + link + '(HTML-error).')
             self.__status = soup_1
         else:
             """Processing data from a downloaded page"""
@@ -667,7 +675,7 @@ class Team():
             print('Uploading team ' + self.__team + ' data: step 2...')
             soup_2 = download_html(link_2) # https://www.hltv.org/stats/lineup/maps?lineup=[Number player 1]&lineup=[Number player 2]&lineup=[Number player 3]&lineup=[Number player 4]&lineup=[Number player 5]&minLineupMatch=3&startDate=[Date 3 month ago]&endDate=[Date today]
             if (type(soup_2) == int):
-                print('Error ' + soup_2 + ' while uploading ' + link + '(HTML-error).')
+                print('Error ' + str(soup_2) + ' while uploading ' + link + '(HTML-error).')
                 self.__status = soup_2
             else:
                 """Processing data from a downloaded page"""
@@ -785,9 +793,10 @@ class Player():
         """Downloading data"""
         """Загрузка данных"""
         print('Uploading player data: step 1...')
+        print(link_1)
         soup_1 = download_html(link_1) # https://www.hltv.org/stats/players/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(soup_1) == int):
-            print('Error ' + soup_1 + ' while uploading ' + link_1 + '(HTML-error).')
+            print('Error ' + str(soup_1) + ' while uploading ' + link_1 + '(HTML-error).')
             self.__status = soup_1
         else:
             """Processing data from a downloaded page"""
@@ -822,7 +831,7 @@ class Player():
                 print('Uploading player ' + self.__nickname + ' data: step 2...')
                 soup_2 = download_html(link_2) # https://www.hltv.org/stats/players/individual/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
                 if (type(soup_2) == int):
-                    print('Error ' + soup_2 + ' while uploading ' + link_2 + '(HTML-error).')
+                    print('Error ' + str(soup_2) + ' while uploading ' + link_2 + '(HTML-error).')
                     self.__status = soup_2
                 else:
                     """Processing data from a downloaded page"""
@@ -881,7 +890,7 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.9 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: v. 0.2.10 alpha.')
 DB = Database()
 DB.create()
 while (decision_made != True):
