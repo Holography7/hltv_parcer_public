@@ -556,8 +556,8 @@ class Match():
                                 self.__status = 1541
                                 return 1541
                             id_player = players_team_1_compare[i]['data-player-id']
-                            if (id_player == 0):
-                                print('In team_1 some players still unknown. Skipping...')
+                            if (id_player == '0'):
+                                print('In team_1 some players still unknown or have not statistic page. Skipping...')
                                 self.__status = 1541
                                 return 1541
                             self.__links_team_1_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
@@ -568,8 +568,8 @@ class Match():
                                 self.__status = 1541
                                 return 1541
                             id_player = players_team_2_compare[i]['data-player-id']
-                            if (id_player == 0):
-                                print('In team_2 some players still unknown. Skipping...')
+                            if (id_player == '0'):
+                                print('In team_2 some players still unknown or have not statistic page. Skipping...')
                                 self.__status = 1541
                                 return 1541
                             self.__links_team_2_players.append(source_urls[0] + source_urls[2] + id_player + '/' + nickname + source_urls[3] + date_3_month_ago + source_urls[4] + date_today)
@@ -793,7 +793,6 @@ class Player():
         """Downloading data"""
         """Загрузка данных"""
         print('Uploading player data: step 1...')
-        print(link_1)
         soup_1 = download_html(link_1) # https://www.hltv.org/stats/players/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(soup_1) == int):
             print('Error ' + str(soup_1) + ' while uploading ' + link_1 + '(HTML-error).')
