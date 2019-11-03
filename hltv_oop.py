@@ -1038,7 +1038,7 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: u3_a1_b10.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.0.')
 DB = Database()
 DB_ready = DB.check()
 while (DB_checking):
