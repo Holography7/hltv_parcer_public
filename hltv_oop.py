@@ -185,8 +185,8 @@ class Database():
             self.__cursor.execute("SELECT ID FROM " + self.__tables_db[len(data)] + ";")
             IDs = self.__cursor.fetchall()
             IDs_list = [IDs[i][0] for i in range(len(IDs))]
-            Data_exist = IDs_list.count(data[0])
-            if(Data_exist != 0):
+            Data_exist = IDs_list.count(int(data[0]))
+            if (Data_exist != 0):
                 print('This ' + self.__key_words[len(data)] + ' already exist. Data will be updated...')
                 self.update_data(data)
             else:
@@ -1038,7 +1038,7 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.0.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.1 alpha.')
 DB = Database()
 DB_ready = DB.check()
 while (DB_checking):
