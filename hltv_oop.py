@@ -1038,7 +1038,7 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.1 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.2 alpha.')
 DB = Database()
 DB_ready = DB.check()
 while (DB_checking):
@@ -1067,7 +1067,7 @@ while (DB_checking):
                     self.__status = soup_glob
                 else:
                     all_upcomig_matches = soup_glob.find(class_='upcoming-matches')
-                    list_upcoming_matches = all_upcomig_matches.find_all('a')
+                    list_upcoming_matches = all_upcomig_matches.find_all('a', class_='a-reset')
                     urls_upcoming_matches = [source_urls[0] + list_upcoming_matches[i]['href'] for i in range(len(list_upcoming_matches))]
                     IDs_upcoming_matches = [int(get_id_from_link(urls_upcoming_matches[i])) for i in range(len(urls_upcoming_matches))]
                     if (IDs_upcoming_matches.count(0) != 0):
