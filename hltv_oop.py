@@ -9,7 +9,6 @@ import os
 """Глобальные переменные и функции"""
 
 source_urls = ['https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=']
-end_prog = ''
 start_bool = True
 skip_confirm = False
 decision_made = False
