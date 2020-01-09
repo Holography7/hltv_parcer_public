@@ -598,14 +598,11 @@ class Match():
                             team_1_result = team_1.find('div', class_='won').text
                             team_2_result = team_2.find('div', class_='lost').text
                         self.__result_maps = team_1_result + ':' + team_2_result
-                        full_result = soup.find('div', class_='flexbox-column')
-                        full_results = full_result.find_all(class_='results')
+                        full_result = soup.find_all('div', class_='results played')
                         self.__result_full = ''
-                        for i in range(len(full_results)):
-                            full_results[i] = full_results[i].text
-                            space = full_results[i].find(' ')
-                            full_results[i] = full_results[i][0:space]
-                            self.__result_full = self.__result_full + full_results[i] + ', '
+                        for i in range(len(full_result)):
+                            full_results = full_result[i].find_all('div', class_='results-team-score')
+                            self.__result_full = self.__result_full + full_results[0].text + ':' + full_results[1].text + ', '
                         self.__result_full = self.__result_full[0:len(self.__result_full)-2]
                         self.__link_team_1_stats = 'None'
                         self.__link_team_2_stats = 'None'
@@ -1037,7 +1034,7 @@ class Player():
 
 """Main executable code"""
 """Основной исполняемый код"""
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.2 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.3.3 alpha.')
 DB = Database()
 DB_ready = DB.check()
 while (DB_checking):
