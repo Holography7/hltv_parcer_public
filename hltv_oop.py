@@ -767,7 +767,7 @@ class Database(Program):
     def get_ids_upcoming_matches(self):
         """Getting the IDs of upcoming matches."""
         """Получение ID предстоящих матчей."""
-        self.__cursor.execute('SELECT ID FROM matches_upcoming;')
+        self.__cursor.execute('SELECT ID FROM matches_upcoming ORDER BY Date_match;')
         data = self.__cursor.fetchall()
         if (data):
             data_IDs = [data[i][0] for i in range(len(data))]
@@ -1084,10 +1084,10 @@ class Match(Program):
                 if (urls_teams_stats):
                     return self.source_urls[0] + urls_teams_stats[teams_dict[team_1]].find('a')['href']
                 else:
-                    print("This match has not URL for team %d stat. Skipping..." % (teams_dict[team_1] + 1))
+                    print('This match has not URL for team %d stat. Skipping...' % (teams_dict[team_1] + 1))
                     return None
             else:
-                print("This match has not URLs for teams stats. Skipping...")
+                print('This match has not URLs for teams stats. Skipping...')
                 return None
         elif (self.status == 10001):
             lineups = self.__soup.find_all('div', class_='lineup standard-box')
@@ -1096,13 +1096,17 @@ class Match(Program):
                 if (tr):
                     players = tr[1].find_all('div', class_='flagAlign')
                     if (players):
-                        IDs_players = []
-                        for i in range(5):
-                            IDs_players.append('lineup=' + players[i]['data-player-id'] + '&')
-                        url = '{}{}{}{}{}{}{}{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *IDs_players, self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
-                        return url
+                        if (len(players) == 5):
+                            IDs_players = []
+                            for i in range(5):
+                                IDs_players.append('lineup=' + players[i]['data-player-id'] + '&')
+                            url = '{}{}{}{}{}{}{}{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *IDs_players, self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
+                            return url
+                        else:
+                            print('In this match team {} have less than 5 players. Skipping...'.format(str(teams_dict[team_1] + 1)))
+                            return None
                     else:
-                        print("This match has not players blocks. Skipping...")
+                        print('This match has not players blocks. Skipping...')
                         return None
                 else:
                     print("This match has not tr blocks. Skipping...")
@@ -1569,7 +1573,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.0 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.1 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
