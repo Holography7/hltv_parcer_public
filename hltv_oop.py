@@ -1222,7 +1222,9 @@ class Team(Program):
         if (stats_urls):
             for i in range(len(self.__maps_data)):
                 download_map_stat = self.__maps_data[i].download_data(stats_urls[i], self.__team, self.__maps_titles[i])
-                if (not download_map_stat):
+                if (download_map_stat != 5136) and (download_map_stat != 200):
+                    return download_map_stat
+                elif (download_map_stat == 5136):
                     return 5136
             print('Team statistics download complete.')
             self.status = 200
@@ -1346,7 +1348,7 @@ class Map_stats(Program):
             self.__pistol_rounds_won = 0
             self.__pistol_round_win_percent = 0
             self.status = 200
-            return True
+            return 200
 
     def get_data(self):
         """Getting map stat data."""
@@ -1573,7 +1575,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.1 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.2 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
