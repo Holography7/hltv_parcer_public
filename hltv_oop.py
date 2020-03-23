@@ -1099,7 +1099,11 @@ class Match(Program):
                         if (len(players) == 5):
                             IDs_players = []
                             for i in range(5):
-                                IDs_players.append('lineup=' + players[i]['data-player-id'] + '&')
+                                if (players[i].text == '\nTBA\n'):
+                                    print('This match has not player {} in team {}. Skipping...'.format(str(i + 1), str(teams_dict[team_1] + 1)))
+                                    return None
+                                else:
+                                    IDs_players.append('lineup=' + players[i]['data-player-id'] + '&')
                             url = '{}{}{}{}{}{}{}{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *IDs_players, self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
                             return url
                         else:
@@ -1575,7 +1579,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.2 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.3 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
