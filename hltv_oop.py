@@ -1312,7 +1312,7 @@ class Map_stats(Program):
         self.__pistol_rounds_won = None
         self.__pistol_round_win_percent = None
         self.status = None
-        self.__table_rows_names = ('Times played', 'Wins / draws / losses', 'Total rounds played', 'Rounds won', 'Win percent', 'Pistol rounds', 'Pistol rounds won', 'Pistol round win percent')
+        self.__table_rows_names = ('Times played', 'Wins / draws / losses', 'Total rounds played', 'Rounds won', 'Win percent', 'Pistol rounds', 'Pistol rounds won', 'Pistol round win percent', 'CT round win percent', 'T round win percent')
 
     def download_data(self, url, team_name, map_name):
         """Parsing map stat."""
@@ -1368,12 +1368,14 @@ class Map_stats(Program):
         """Parsing map stat data."""
         """Парсинг данных статистики карты."""
         stats = self.__soup.find_all(class_='stats-row')
-        if (len(stats) == 8):
+        if (len(stats) == 10):
             for i in range(len(stats)):
                 stats[i] = stats[i].text.replace(self.__table_rows_names[i], '')
             stats[1] = stats[1].split(' / ')
             stats[4] = stats[4][0:len(stats[4])-1]
             stats[7] = stats[7][0:len(stats[7])-1]
+            stats[8] = stats[8][0:len(stats[8])-1]
+            stats[9] = stats[9][0:len(stats[9])-1]
             data_team_map = []
             for i in range(len(stats)):
                 if (i != 1):
@@ -1579,7 +1581,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.3 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.4 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
