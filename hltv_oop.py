@@ -229,7 +229,7 @@ class Program():
             self.__urls_teams = tuple(self.__urls_teams)
             self.__urls_teams_stat = tuple(self.__urls_teams_stat)
             self.__urls_players_stats = tuple(self.__urls_players_stats)
-            if (self.__urls_teams) and (self.__urls_teams_stat) and (self.__urls_players_stats[0]) and (self.__urls_players_stats[1]):
+            if (self.__urls_teams) and (self.__urls_teams_stat) and (self.__urls_players_stats):
                 print('Parcer updating teams and players stats from completed matches...')
                 for i in range(len(self.__urls_teams)):
                     update_stat = self.__download_stats_all(self.__urls_teams[i], self.__urls_teams_stat[i], self.__urls_players_stats[i], None)
@@ -1099,7 +1099,7 @@ class Match(Program):
                         if (len(players) == 5):
                             IDs_players = []
                             for i in range(5):
-                                if (players[i].text == '\nTBA\n'):
+                                if (players[i].text == '\nTBA\n') or (players[i].text == '\nTBD\n'):
                                     print('This match has not player {} in team {}. Skipping...'.format(str(i + 1), str(teams_dict[team_1] + 1)))
                                     return None
                                 else:
@@ -1581,7 +1581,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.4 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.5 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
