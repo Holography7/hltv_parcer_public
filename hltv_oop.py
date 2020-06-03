@@ -1094,7 +1094,7 @@ class Match(Program):
             if (lineups):
                 tr = lineups[teams_dict[team_1]].find_all('tr')
                 if (tr):
-                    players = tr[1].find_all('div', class_='flagAlign')
+                    players = tr[1].find_all('div', class_='flagAlign', attrs = {'data-player-id': True})
                     if (players):
                         if (len(players) == 5):
                             IDs_players = []
@@ -1581,7 +1581,7 @@ class Player(Program):
 """Основной исполняемый код"""
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.5 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.6 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
