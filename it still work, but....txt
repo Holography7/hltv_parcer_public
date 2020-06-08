@@ -1,0 +1,1 @@
+Since version 0.4.7, the parser uses the fake_useragent library ,thus "pretending" to be the browser. Therefore, do not recommend using the parser too often.

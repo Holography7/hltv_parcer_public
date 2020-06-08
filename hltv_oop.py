@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
+from fake_useragent import UserAgent
 import time
 from datetime import datetime
 import os
@@ -7,6 +8,7 @@ import shutil
 import sqlite3
 from datetime import date
 from datetime import timedelta
+import random
 
 class Program():
     """Main class"""
@@ -32,9 +34,8 @@ class Program():
 
     def download_html(self, url):
         try:
-            time.sleep(1) # If not do that, hltv.org get temporarily ban an IP address that is running the parser. (https://www.hltv.org/robots.txt)
-            # Если этого не сделать, hltv.org временно забанит IP адрес, где запущен этот парсер. (https://www.hltv.org/robots.txt)
-            req = requests.get(url)
+            time.sleep(random.uniform(1, 2))
+            req = requests.get(url, headers={'User-Agent': user_agent}, timeout=1)
             if (req.status_code == 200):
                 return BeautifulSoup(req.text, 'html.parser')
             else:
@@ -1199,6 +1200,7 @@ class Team(Program):
         """Парсинг данных команды."""
         print('Uploading team data: step 1...')
         self.__soup_1 = self.download_html(url_1) # https://www.hltv.org/team/[ID]/[Team name]
+        print('Downloaded.')
         if (type(self.__soup_1) == int):
             self.status = self.__soup_1
             return self.status
@@ -1579,9 +1581,10 @@ class Player(Program):
 
 """Main executable code"""
 """Основной исполняемый код"""
+user_agent = UserAgent().chrome
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.6 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.7 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
