@@ -9,6 +9,7 @@ import sqlite3
 from datetime import date
 from datetime import timedelta
 import random
+import socket
 
 class Program():
     """Main class"""
@@ -35,7 +36,7 @@ class Program():
     def download_html(self, url):
         try:
             time.sleep(random.uniform(1, 2))
-            req = requests.get(url, headers={'User-Agent': user_agent}, timeout=1)
+            req = requests.get(url, headers={'User-Agent': user_agent}, timeout=5)
             if (req.status_code == 200):
                 return BeautifulSoup(req.text, 'html.parser')
             else:
@@ -45,6 +46,17 @@ class Program():
             print('Error: timed out. Stopping parcing this page...')
             print(str(e))
             return 408
+        except socket.timeout as e:
+            print('Error: timed out. Stopping parcing this page...')
+            print(str(e))
+            return 408
+        except exceptions.ReadTimeoutError as e:
+            print('Error: timed out. Stopping parcing this page...')
+            print(str(e))
+            return 408
+        except Exception as e:
+            print("Unknown error while downloading HTML: {}. Stopping parcing this page...".format(str(e)))
+            return e
 
     def get_id_from_url(self, url):
         """Getting an ID from a URL."""
@@ -1200,7 +1212,6 @@ class Team(Program):
         """Парсинг данных команды."""
         print('Uploading team data: step 1...')
         self.__soup_1 = self.download_html(url_1) # https://www.hltv.org/team/[ID]/[Team name]
-        print('Downloaded.')
         if (type(self.__soup_1) == int):
             self.status = self.__soup_1
             return self.status
@@ -1584,7 +1595,7 @@ class Player(Program):
 user_agent = UserAgent().chrome
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.7 alpha.')
+print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.8 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
     print('Config imported successfully.')
