@@ -16,47 +16,63 @@ class Program():
     """Основной класс"""
 
     def __init__(self):
+        global user_agent
+        global count_retries
+        user_agent = UserAgent().chrome
+        count_retries = 3
         self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.questions = ('Start parcer? (Y/n): ',
-        'The parser can work in automatic mode. If you disable it, you will be asked if you want to continue playing each match. In automatic mode, the parser operation time may take a long time. Enable automatic mode? (y/N): ',
         'Want to start? (Y/n): ',
         'Want to continue? (Y/n): ',
         'Want to recreate the database (if yes, the old database will saved as hltv_compact_old.db)? (Y/n): ',
         'Got error while downloading match. Do you want continue? (Y/n): ')
         self.DB = None
         self.DB_filename = None
+        self.auto_mode = None
+        self.repeat_mode = None
+        self.log_add_mode = None
         self.competitive_maps = [True, True, True, True, True, True, True, True, True, True, True] # Cache, Cobblestone, Dust2, Inferno, Mirage, Nuke, Overpass, Season, Train, Tuscan, Vertigo
-        self.__settings_titles = ("filename='", "cache='", "cobblestone='", "dust2='", "inferno='", "mirage='", "nuke='", "overpass='", "season='", "train='", "tuscan='", "vertigo='")
-        self.__soup = None
-        self.__urls_matches_soup = None
-        self.__urls_teams = []
-        self.__urls_teams_stat = []
-        self.__urls_players_stats = []
+        self.__settings_titles = ('cache=', 'cobblestone=', 'dust2=', 'inferno=', 'mirage=', 'nuke=', 'overpass=', 'season=', 'train=', 'tuscan=', 'vertigo=', 'filename=', 'auto_mode=', 'repeat_mode=', 'log_add_mode=', 'download_count_retries=')
+        self.__soup = None # relocate to new class
+        self.__urls_matches_soup = [] # relocate to new class
+        self.__titles_matches_soup = [] # relocate to new class
+        self.__match_tournaments_soup = [] # relocate to new class
+        self.__match_dates_soup = [] # relocate to new class
+        self.__team_titles_for_update = [] # relocate to new class
+        self.__urls_teams = [] # relocate to new class
+        self.__urls_teams_stat = [] # relocate to new class
+        self.__urls_players_stats = [] # relocate to new class
+        self.__nicknames = [] # relocate to new class
 
     def download_html(self, url):
-        try:
-            time.sleep(random.uniform(1, 2))
-            req = requests.get(url, headers={'User-Agent': user_agent}, timeout=5)
-            if (req.status_code == 200):
-                return BeautifulSoup(req.text, 'html.parser')
-            else:
-                print('Error {} while uploading {} (HTML-error).'.format(str(req.status_code), url))
-                return req.status_code
-        except requests.Timeout as e:
-            print('Error: timed out. Stopping parcing this page...')
-            print(str(e))
-            return 408
-        except socket.timeout as e:
-            print('Error: timed out. Stopping parcing this page...')
-            print(str(e))
-            return 408
-        except exceptions.ReadTimeoutError as e:
-            print('Error: timed out. Stopping parcing this page...')
-            print(str(e))
-            return 408
-        except Exception as e:
-            print("Unknown error while downloading HTML: {}. Stopping parcing this page...".format(str(e)))
-            return e
+        for i in range(count_retries):
+            status = 0
+            try:
+                time.sleep(random.uniform(1, 2))
+                req = requests.get(url, headers={'User-Agent': user_agent}, timeout=5)
+                if (req.status_code == 200):
+                    return BeautifulSoup(req.text, 'html.parser')
+                else:
+                    self.log_and_print('Error {} while uploading {} (HTML-error).'.format(str(req.status_code), url))
+                    status = req.status_code
+            except requests.Timeout as e:
+                self.log_and_print('Error: timed out. Stopping parcing this page...')
+                self.log_and_print(str(e))
+                status = 408
+            except socket.timeout as e:
+                self.log_and_print('Error: timed out. Stopping parcing this page...')
+                self.log_and_print(str(e))
+                status = 408
+            except exceptions.ReadTimeoutError as e:
+                self.log_and_print('Error: timed out. Stopping parcing this page...')
+                self.log_and_print(str(e))
+                status = 408
+            except Exception as e:
+                self.log_and_print("Unknown error while downloading HTML: {}. Stopping parcing this page...".format(str(e)))
+                status = e
+            if (i != count_retries - 1):
+                self.log_and_print("Attempt to re-download HTML (retries {} remain).".format(count_retries - i - 1))
+        return status
 
     def get_id_from_url(self, url):
         """Getting an ID from a URL."""
@@ -74,7 +90,7 @@ class Program():
         if (ID.isdigit() == True):
             return ID
         else:
-            print('Error 1470: ID not founded in URL {}.'.format(url))
+            self.log_and_print('Error 1470: ID not founded in URL {}.'.format(url))
             return '0'
 
     def question(self, question_message, default_answer):
@@ -87,14 +103,14 @@ class Program():
             elif answer == 'N' or answer == 'n' or (answer == '' and not default_answer):
                 return False
             else:
-                print('Try again.')
+                self.log_and_print('Try again.')
 
-    def parcing_auto(self):
+    def parcing_auto(self): # relocate to new class
         """Method for automatic parsing mode"""
         """Метод для автоматического режима парсинга"""
         for i in range(len(self.__urls_matches_soup)):
             match = Match()
-            match_code_downloaded = match.download_data(self.__urls_matches_soup[i])
+            match_code_downloaded = match.download_data(self.__urls_matches_soup[i], self.__titles_matches_soup[i], self.__match_dates_soup[i], self.__match_tournaments_soup[i])
             if (match_code_downloaded == 200):
                 match_data = match.get_data()
                 urls_teams = match.get_urls_teams()
@@ -106,30 +122,38 @@ class Program():
                 players_urls = (match.get_urls_stats_players(True), match.get_urls_stats_players(False))
                 if (not players_urls[0]) and (not players_urls[1]):
                     return False
-                update_stat = self.__download_stats_all(urls_teams, urls_teams_stats, players_urls, match_data)
+                match_titles = match.get_teams_titles()
+                if (not match_titles):
+                    return False
+                match_nicknames = match.get_nicknames()
+                if (not match_nicknames):
+                    return False
+                update_stat = self.__download_stats_all(urls_teams, urls_teams_stats, players_urls, match_data, match_titles, match_nicknames)
                 if (not update_stat):
                     return False
                 elif (update_stat == 5136):
+                    self.log_and_print('Skipping...')
                     continue
             elif (match_code_downloaded == 5136):
+                self.log_and_print('Skipping...')
                 continue
             else:
-                ignore_error = self.question(program.questions[5], True)
+                ignore_error = self.question(self.questions[4], True)
                 if (ignore_error):
                     continue
                 else:
-                    print('Stopping parcer...')
+                    self.log_and_print('Stopping parcer...')
                     return False
         return True
 
-    def parcing_manually(self):
+    def parcing_manually(self): # merge with parcing_auto
         """Method for manual parsing mode"""
         """Метод для ручного режима парсинга"""
-        stop = self.question(self.questions[2], True)
+        stop = self.question(self.questions[1], True)
         i = 0
         while (stop):
             match = Match()
-            match_code_downloaded = match.download_data(self.__urls_matches_soup[i])
+            match_code_downloaded = match.download_data(self.__urls_matches_soup[i], self.__titles_matches_soup[i], self.__match_dates_soup[i], self.__match_tournaments_soup[i])
             if (match_code_downloaded == 200):
                 match_data = match.get_data()
                 urls_teams = match.get_urls_teams()
@@ -141,82 +165,95 @@ class Program():
                 players_urls = (match.get_urls_stats_players(True), match.get_urls_stats_players(False))
                 if (not players_urls[0]) and (not players_urls[1]):
                     return False
-                update_stat = self.__download_stats_all(urls_teams, urls_teams_stats, players_urls, match_data)
+                match_titles = match.get_teams_titles()
+                if (not match_titles):
+                    return False
+                match_nicknames = match.get_nicknames()
+                if (not match_nicknames):
+                    return False
+                update_stat = self.__download_stats_all(urls_teams, urls_teams_stats, players_urls, match_data, match_titles, match_nicknames)
                 if (not update_stat):
                     return False
                 elif (update_stat == 5136):
                     i += 1
                     if (i < len(self.__urls_matches_soup)):
-                        stop = self.question(self.questions[3], True)
+                        stop = self.question(self.questions[2], True)
                     else:
                         stop = False
                     continue
             elif (match_code_downloaded == 5136):
+                self.log_and_print('Skipping...')
                 i += 1
                 if (i < len(self.__urls_matches_soup)):
-                    stop = self.question(self.questions[3], True)
+                    stop = self.question(self.questions[2], True)
                 else:
                     stop = False
                 continue
             else:
-                ignore_error = self.question(program.questions[5], True)
+                ignore_error = self.question(self.questions[4], True)
                 if (ignore_error):
                     continue
                 else:
-                    print('Stopping parcer...')
+                    self.log_and_print('Stopping parcer...')
                     return False
             i += 1
             if (i < len(self.__urls_matches_soup)):
-                stop = self.question(self.questions[3], True)
+                stop = self.question(self.questions[2], True)
             else:
                 stop = False
         return True
 
 
-    def parcing_update(self):
+    def parcing_update(self): # relocate to new class (and rework 'cause it's too big)
         """Method to update data on added upcoming matches"""
         """Метод для обновления данных о добавленных предстоящих матчах"""
-        print('Preparing list of matches...')
+        self.log_and_print('Preparing list of matches...')
         self.__soup = self.download_html('https://www.hltv.org/matches')
         if (type(self.__soup) == int):
             return False
-        self.__urls_matches_soup = self.__soup_get_urls_matches()
-        if (not self.__urls_matches_soup):
+        info_matches_downloaded = self.__soup_get_info_matches()
+        if (not info_matches_downloaded):
             return False
         urls_matches_DB = self.DB.get_urls_upcomig_matches()
         if (not urls_matches_DB):
-            print('Warning: list of URLs matches in DB is empty.')
+            self.log_and_print('Warning: list of URLs matches in DB is empty.')
             return True
         else:
-            self.__urls_matches_soup = self.__soup_prepare_urls(self.__urls_matches_soup, urls_matches_DB)
-            if (not self.__urls_matches_soup):
+            urls_prepared = self.__soup_prepare_urls(urls_matches_DB)
+            if (not urls_prepared):
                 return False
             urls_matches_DB = self.DB.get_urls_upcomig_matches()
-            print('Updating info about exist matches...')
+            teams_titles = self.DB.get_titles_upcomig_matches()
+            matches_titles = tuple([teams_titles[i][0] + ' vs ' + teams_titles[i][1] for i in range(len(teams_titles))])
+            date_matches = self.DB.get_dates_upcomig_matches()
+            tournaments_matches = self.DB.get_tournaments_upcoming_matches()
+            self.log_and_print('Updating info about exist matches...')
             for i in range(len(urls_matches_DB)):
                 match = Match()
-                match_code_downloaded = match.download_data(urls_matches_DB[i])
+                match_code_downloaded = match.download_data(urls_matches_DB[i], matches_titles[i], date_matches[i], tournaments_matches[i])
                 if (match_code_downloaded == 200):
                     match_data = match.get_data()
                 elif (match_code_downloaded == 5136):
+                    self.log_and_print('Skipping...')
                     continue
                 elif (match_code_downloaded == 4313):
                     match_data = match.get_data()
                     id_match = match_data[4313]
+                    self.log_and_print('Deleting...')
                     self.DB.delete_data('matches_upcoming', id_match)
                 else:
-                    ignore_error = self.question(program.questions[5], True)
+                    ignore_error = self.question(self.questions[4], True)
                     if (ignore_error):
                         continue
                     else:
-                        print('Stopping parcer...')
+                        self.log_and_print('Stopping parcer...')
                         return False
                 if (type(match_data) == tuple):
-                    if (len(match_data) == 7):
+                    if (len(match_data) == 8):
                         update = self.DB.update_data(match_data)
                         if (not update):
                             return False
-                    elif (len(match_data) == 9):
+                    elif (len(match_data) == 10):
                         self.DB.write_data(match_data)
                         self.DB.delete_data('matches_upcoming', match_data[0])
                         urls = match.get_urls_teams()
@@ -234,42 +271,53 @@ class Program():
                             self.__urls_players_stats.append(players_urls)
                         else:
                             return False
+                        teams_titles_for_update = match.get_teams_titles()
+                        if (teams_titles_for_update):
+                            self.__team_titles_for_update.append(teams_titles_for_update)
+                        else:
+                            return False
+                        players_nicknames = match.get_nicknames()
+                        if (players_nicknames):
+                            self.__nicknames.append(players_nicknames)
+                        else:
+                            return False
                     else:
-                        print('Error while getting match data: wrong data len. Parcer will stopped...')
+                        self.log_and_print('Error while getting match data: wrong data len. Parcer will stopped...')
                         return False
                 elif (type(match_data) == int):
-                    print('This match not updated. Probably, it should delete.')
+                    self.log_and_print('This match not updated. Probably, it should delete.')
             self.__urls_teams = tuple(self.__urls_teams)
             self.__urls_teams_stat = tuple(self.__urls_teams_stat)
             self.__urls_players_stats = tuple(self.__urls_players_stats)
+            self.__team_titles_for_update = tuple(self.__team_titles_for_update)
             if (self.__urls_teams) and (self.__urls_teams_stat) and (self.__urls_players_stats):
-                print('Parcer updating teams and players stats from completed matches...')
+                self.log_and_print('Parcer updating teams and players stats from completed matches...')
                 for i in range(len(self.__urls_teams)):
-                    update_stat = self.__download_stats_all(self.__urls_teams[i], self.__urls_teams_stat[i], self.__urls_players_stats[i], None)
+                    update_stat = self.__download_stats_all(self.__urls_teams[i], self.__urls_teams_stat[i], self.__urls_players_stats[i], None, self.__team_titles_for_update[i], self.__nicknames[i])
                     if (not update_stat):
                         return False
                     elif (update_stat == 5136):
                         continue
-            print('Parcer ready to collecting new matches.')
+            self.log_and_print('Parcer ready to collecting new matches.')
             return True
 
-    def recreate_DB(self):
+    def recreate_DB(self): # relocate to Database class
         """If DB is damaged, you must call this method to create a new one and save the old one."""
         """В случае если БД повреждена, необходимо вызвать этот метод для создания новой и сохранения старой."""
-        print('Disconnecting database...')
+        self.log_and_print('Disconnecting database...')
         self.DB.disconnect()
-        print('Renaming...')
+        self.log_and_print('Renaming...')
         os.rename(self.DB_filename, 'old_' + self.DB_filename)
         self.DB.connect()
         DB_ready = DB.check()
         if (DB_ready):
-            print('Database recreated.')
+            self.log_and_print('Database recreated.')
             return True
         else:
-            print('Database recreate failed (unknown error).')
+            self.log_and_print('Database recreate failed (unknown error).')
             return False
 
-    def import_settings(self):
+    def import_settings(self): # must not be inherited to other classes
         """Importing parser settings from settings.cfg."""
         """Импортирование настроек парсера из файла settings.cfg."""
         if (os.path.isfile('settings.cfg')):
@@ -283,21 +331,46 @@ class Program():
             if (start_point == len(self.__settings_titles[i]) - 1):
                 print("Error while reading settings.cfg: {} not found.".format(self.__settings_titles[i]))
                 return False
-            end_point = file_data.find("'", start_point)
+            end_point = file_data.find("\n", start_point)
             if (end_point == -1):
-                print("Error while reading settings.cfg: symbol closing ' not found.")
+                print("Error while reading settings.cfg: end of line not found while reading '{}'.".format(self.__settings_titles[i]))
                 return False
             field_value = file_data[start_point:end_point]
             if (field_value):
-                if (i == 0):
+                if (i == 11):
                     self.DB_filename = field_value
                     self.DB = Database(field_value)
-                else:
-                    if (field_value == 'True'):
-                        self.competitive_maps[i-1] = True
-                    elif (field_value == 'False'):
-                        self.competitive_maps[i-1] = False
+                elif (i == 12):
+                    self.auto_mode = self.str_to_bool(field_value)
+                    if (self.auto_mode == None):
+                        print('Error while reading settings.cfg: auto_mode value cannot be readen.')
+                        return False
+                elif (i == 13):
+                    if (field_value.isdigit()):
+                        self.repeat_mode = int(field_value)
                     else:
+                        print('Error while reading settings.cfg: repeat_mode value not a integer.')
+                        return False
+                elif (i == 14):
+                    self.log_add_mode = self.str_to_bool(field_value)
+                    if (self.log_add_mode == None):
+                        print('Error while reading settings.cfg: log_add_mode value cannot be readen.')
+                        return False
+                    self.__use_log()
+                elif (i == 15):
+                    global count_retries
+                    if (field_value.isdigit()):
+                        if (int(field_value) <= 20):
+                            count_retries = int(field_value)
+                        else:
+                            count_retries = 20
+                            print('Not critical error while reading settings.cfg: download_count_retries more than 20. Count set to 20.')
+                    else:
+                        print('Error while reading settings.cfg: download_count_retries value not a integer.')
+                        return False
+                else:
+                    self.competitive_maps[i] = self.str_to_bool(field_value)
+                    if (self.competitive_maps[i] == None):
                         print('Error while reading settings.cfg: {} value cannot be readen.'.format(self.__settings_titles[i]))
                         return False
             else:
@@ -305,48 +378,69 @@ class Program():
                 return False
         return True
 
-    def __soup_get_urls_matches(self):
+    def __soup_get_info_matches(self): # relocate to new class
         """Parsing URLs to upcoming matches."""
         """Парсинг URL на предстоящие матчи."""
         block_upcomig_matches = self.__soup.find(class_='upcoming-matches')
         if (not block_upcomig_matches):
-            print('Error while searching block "upcoming-matches". Parcer will stopped...')
-            return None
+            self.log_and_print('Error while searching block "upcoming-matches". Parcer will stopped...')
+            return False
         all_upcoming_matches = block_upcomig_matches.find_all('a', class_='a-reset')
         if (not all_upcoming_matches):
-            print('Error while searching URLs on upcoming matches (there are not upcoming matches?). Parcer will stopped...')
-            return None
-        urls_matches_soup = [self.source_urls[0] + all_upcoming_matches[i]['href'] for i in range(len(all_upcoming_matches))]
-        return urls_matches_soup
+            self.log_and_print('Error while searching URLs on upcoming matches (there are not upcoming matches?). Parcer will stopped...')
+            return False
+        all_dates = block_upcomig_matches.find_all('div', class_='upcoming-match standard-box')
+        for i in range(len(all_upcoming_matches)):
+            teams = all_upcoming_matches[i].find_all('td', class_='team-cell')
+            if (teams):
+                if (teams[0].find('img')) and (teams[1].find('img')):
+                    self.__urls_matches_soup.append(self.source_urls[0] + all_upcoming_matches[i]['href'])
+                    self.__titles_matches_soup.append(teams[0].find('div', class_='team').text + ' vs ' + teams[1].find('div', class_='team').text)
+                    self.__match_tournaments_soup.append(all_upcoming_matches[i].find('span', class_='event-name').text)
+                else:
+                    continue
+            else:
+                continue
+            self.__match_dates_soup.append(datetime.fromtimestamp(float(all_dates[i]['data-zonedgrouping-entry-unix'])/1000).isoformat(' ') + '.000')
+        return True
 
-    def __soup_prepare_urls(self, urls_matches_soup, urls_matches_DB):
+    def __soup_prepare_urls(self, urls_matches_DB): # relocate to new class (and rename to __soup_clear_urls_exist_matches or something like that)
         """Changing the URLs in DB (with the same ID) and return the URLs of upcoming matches that are not in the DB."""
         """Изменение URL в БД (с одинаковыми ID) и вывод URL предстоящих матчей, которых нет в БД."""
-        IDs_matches_soup = [int(self.get_id_from_url(urls_matches_soup[i])) for i in range(len(urls_matches_soup))]
+        IDs_matches_soup = [int(self.get_id_from_url(self.__urls_matches_soup[i])) for i in range(len(self.__urls_matches_soup))]
         if (IDs_matches_soup.count(0) != 0):
-            print('Error while getting IDs matches from URLs on upcoming matches (getted ID = 0). Parcer will stopped...')
-            return None
+            self.log_and_print('Error while getting IDs matches from URLs on upcoming matches (getted ID = 0). Parcer will stopped...')
+            return False
         IDs_matches_DB = self.DB.get_ids_upcoming_matches()
         if (not IDs_matches_DB):
-            print('Error while getting IDs matches from DB. Parcer will stopped...')
-            return None
+            self.log_and_print('Error while getting IDs matches from DB. Parcer will stopped...')
+            return False
         for i in range(len(IDs_matches_DB)):
             if (IDs_matches_soup.count(IDs_matches_DB[i]) >= 1):
                 if (IDs_matches_soup.count(IDs_matches_DB[i]) > 1):
-                    print('Warning: probably, URL corrupted (all_upcoming_matches contains the same matches)')
+                    self.log_and_print('Warning: probably, URL corrupted (all_upcoming_matches contains the same matches)')
                 for j in range(IDs_matches_soup.count(IDs_matches_DB[i])):
                     index_ID_match_DB = IDs_matches_soup.index(IDs_matches_DB[i])
-                    if (urls_matches_soup[index_ID_match_DB] != urls_matches_DB[i]):
-                        print ('Changing URL "{}" to "{}"'.format(urls_matches_DB[i], urls_matches_soup[index_ID_match_DB]))
-                        updated_url = self.DB.change_upcoming_match_url(IDs_matches_soup[index_ID_match_DB], urls_matches_soup[index_ID_match_DB])
+                    if (self.__urls_matches_soup[index_ID_match_DB] != urls_matches_DB[i]):
+                        self.log_and_print('Changing URL "{}" to "{}"'.format(urls_matches_DB[i], self.__urls_matches_soup[index_ID_match_DB]))
+                        updated_url = self.DB.change_upcoming_match_url(IDs_matches_soup[index_ID_match_DB], self.__urls_matches_soup[index_ID_match_DB])
                         if (not updated_url):
-                            return None
+                            return False
                     IDs_matches_soup.pop(index_ID_match_DB)
-                    urls_matches_soup.pop(index_ID_match_DB)
-        return urls_matches_soup
+                    self.__urls_matches_soup.pop(index_ID_match_DB)
+                    self.__titles_matches_soup.pop(index_ID_match_DB)
+                    self.__match_tournaments_soup.pop(index_ID_match_DB)
+                    self.__match_dates_soup.pop(index_ID_match_DB)
+        self.__urls_matches_soup = tuple(self.__urls_matches_soup)
+        self.__titles_matches_soup = tuple(self.__titles_matches_soup)
+        self.__match_tournaments_soup = tuple(self.__match_tournaments_soup)
+        self.__match_dates_soup = tuple(self.__match_dates_soup)
+        return True
 
-    def __download_player_current_team(self, url): # Для этапа проверки принадлежности игроков к команде
-        print('Uploading player data: step 1...')
+    def __download_player_current_team(self, url): # relocate to new class
+        """Method for the stage of checking whether players belong to the team (after downloading all matches)."""
+        """Метод для этапа проверки принадлежности игроков к команде (после загрузки всех матчей)."""
+        self.log_and_print('Uploading player data: step 1...')
         soup = self.download_html(url) # https://www.hltv.org/stats/players/[ID]/[Nickname]
         if (type(soup) == int):
             return None
@@ -358,22 +452,22 @@ class Program():
             if (team_current):
                 return team_current.text
             else:
-                print('Error: cannot get current team. Skipping...')
+                self.log_and_print('Error: cannot get current team. Skipping...')
                 return None
 
-    def __download_stats_all(self, urls_teams, urls_teams_stats, urls_players, match_data):
+    def __download_stats_all(self, urls_teams, urls_teams_stats, urls_players, match_data, team_titles, nicknames): # relocate to new class (and remove part with writing data into database)
         """Getting statistics of teams and players and write into DB."""
         """Получение статистики команд и игроков и запись их в БД."""
-        teams = (Team(), Team())
+        teams = (Team(self.competitive_maps), Team(self.competitive_maps))
         teams_data = [[], []]
         players_data = [[], []]
         for i in range(len(teams)):
-            success_download = teams[i].download_data(urls_teams[i], urls_teams_stats[i])
+            success_download = teams[i].download_data(urls_teams[i], urls_teams_stats[i], team_titles[i])
             if (success_download == 200):
                 teams_data[i] = teams[i].get_data()
                 if (teams_data[i]):
-                    print(teams_data[i]) # For debug
-                    print(len(teams_data[i])) # For debug
+                    self.log_and_print(str(teams_data[i])) # For debug
+                    self.log_and_print(str(len(teams_data[i]))) # For debug
                 else:
                     return None
             elif (success_download == 5136):
@@ -384,11 +478,11 @@ class Program():
         players = ((Player(), Player(), Player(), Player(), Player()), ((Player(), Player(), Player(), Player(), Player())))
         for i in range(len(players)):
             for j in range(len(players[i])):
-                success_download = players[i][j].download_data(urls_players[i][j])
+                success_download = players[i][j].download_data(urls_players[i][j], nicknames[i][j])
                 if (success_download == 200):
                     players_data[i].append(players[i][j].get_data())
                     if (players_data[i][j]):
-                        print(players_data[i][j]) # For debug
+                        self.log_and_print(str(players_data[i][j])) # For debug
                     else:
                         return None
                 elif (success_download == 5136):
@@ -406,7 +500,7 @@ class Program():
         else:
             return None
 
-    def __write_data_in_DB(self, match, teams, players):
+    def __write_data_in_DB(self, match, teams, players): # relocate to new class (or just remove that)
         """Writing statistics of teams and players into DB."""
         """Запись статистики команд и игроков в БД."""
         if (match):
@@ -426,27 +520,27 @@ class Program():
                         return False
         return True
 
-    def backup_DB(self):
+    def backup_DB(self): # relocate to Database class
         if (os.path.exists('backup_db')):
             if (os.path.isfile(self.DB_filename)):
                 shutil.copy(self.DB_filename, 'backup_db')
             else:
-                print("Error while backuping DB: file DB not found.")
+                self.log_and_print("Error while backuping DB: file DB not found.")
                 return False
         else:
             os.mkdir('backup_db')
             if (os.path.isfile(self.DB_filename)):
                 shutil.copy(self.DB_filename, 'backup_db')
             else:
-                print("Error while backuping DB: file DB not found.")
+                self.log_and_print("Error while backuping DB: file DB not found.")
                 return False
-        print('Database backuped successfully.')
+        self.log_and_print('Database backuped successfully.')
         return True
 
-    def update_current_team_of_players(self):
+    def update_current_team_of_players(self): # relocate to new class
         """Update information about the player's current team."""
         """Обновление информации о текущей команде игрока."""
-        print('Parcer updating current teams for players...')
+        self.log_and_print('Parcer updating current teams for players...')
         teams = self.DB.get_teams_titles()
         for i in range(len(teams)):
             players = self.DB.get_players_of_current_team(teams[i])
@@ -456,13 +550,55 @@ class Program():
                     current_team = player.download_current_team(players[j][2], players[j][1])
                     if (current_team):
                         if (current_team != teams[i]):
-                            print('Current team is "{}". Team in database is "{}". Changing...'.format(current_team, teams[i]))
+                            self.log_and_print('Current team is "{}". Team in database is "{}". Changing...'.format(current_team, teams[i]))
                             success_update = self.DB.update_current_team(players[j][0], current_team)
                             if (not success_update):
                                 return False
                     else:
                         return False
         return True
+
+    def log_and_print(self, input_string):
+        """Print text and write in log file."""
+        """Вывод текста и запись его в лог файл."""
+        if (type(input_string) == str):
+            print(input_string)
+            log_file = open('parcer.log', 'a', encoding='utf-8')
+            log_file.write(input_string + '\n')
+            log_file.close()
+        else:
+            print('Log and print error: input value must be str, getted {}.'.format(type(input_string)))
+
+    def str_to_bool(self, value):
+        if (type(value) == str):
+            if (value == 'True'):
+                return True
+            elif (value == 'False'):
+                return False
+            else:
+                self.log_and_print('Error while convert string to bool: value not a True or False (getted {}).'.format(value))
+                return None
+        else:
+            self.log_and_print('Error while convert string to bool: value not a string (getted {}).'.format(type(value)))
+            return None
+
+    def __use_log(self): # need try except
+        types_open_log = {True: 'a', False: 'w'}
+        log_file = open('parcer.log', types_open_log[os.path.isfile('parcer.log') and self.log_add_mode], encoding='utf-8')
+        log_file.write('-------------------------------------------------------------------------------------------------------------------------------\n')
+        log_file.write('Start datetime: {}\n'.format(datetime.now().isoformat(' ')))
+        log_file.close()
+
+    def clear_temp_data(self): # relocate to new class
+        self.__soup = None
+        self.__urls_matches_soup = None
+        self.__titles_matches_soup = None
+        self.__match_tournaments_soup = None
+        self.__match_dates_soup = None
+        self.__team_titles_for_update = []
+        self.__urls_teams = []
+        self.__urls_teams_stat = []
+        self.__urls_players_stats = []
 
 class Database(Program):
 
@@ -472,19 +608,19 @@ class Database(Program):
         self.__cursor = self.__conn.cursor()
         self.__tables_tuple = ('matches_upcoming', 'matches_completed', 'players', 'teams', 'DB_version')
         self.__columns_tables = (
-        ('ID', 'Team_1', 'Team_2', 'Date_match', 'Format_match', 'Maps', 'URL'),
-        ('ID', 'Team_1', 'Team_2', 'Date_match', 'Format_match', 'Maps', 'Result_full', 'Result_maps', 'URL'),
+        ('ID', 'Team_1', 'Team_2', 'Date_match', 'Tournament', 'Format_match', 'Maps', 'URL'),
+        ('ID', 'Team_1', 'Team_2', 'Date_match', 'Tournament', 'Format_match', 'Maps', 'Result_full', 'Result_maps', 'URL'),
         ('ID', 'Player', 'Current_Team', 'Kills', 'Deaths', 'Kill_per_Death', 'Kill__per_Round', 'Rounds_with_kills', 'Kill_Death_difference', 'Total_opening_kills', 'Total_opening_deaths', 'Opening_kill_ratio', 'Opening_kill_rating', 'Team_win_percent_after_first_kill', 'First_kill_in_won_rounds', 'Zero_kill_rounds', 'One_kill_rounds', 'Double_kill_rounds', 'Triple_kill_rounds', 'Quadro_kill_rounds', 'Penta_kill_rounds', 'Rifle_kills', 'Sniper_kills', 'SMG_kills', 'Pistol_kills', 'Grenade', 'Other', 'Rating_2_0', 'URL'),
-        ('ID', 'Team', 'Rating', 'Cache_Times_played', 'Cache_Wins', 'Cache_Draws', 'Cache_Losses', 'Cache_Total_rounds_played', 'Cache_Rounds_won', 'Cache_Win_percent', 'Cache_Pistol_rounds', 'Cache_Pistol_rounds_won', 'Cache_Pistol_round_win_percent', 'Cobblestone_Times_played', 'Cobblestone_Wins', 'Cobblestone_Draws', 'Cobblestone_Losses', 'Cobblestone_Total_rounds_played', 'Cobblestone_Rounds_won', 'Cobblestone_Win_percent', 'Cobblestone_Pistol_rounds', 'Cobblestone_Pistol_rounds_won', 'Cobblestone_Pistol_round_win_percent', 'Dust_2_Times_played', 'Dust_2_Wins', 'Dust_2_Draws', 'Dust_2_Losses', 'Dust_2_Total_rounds_played', 'Dust_2_Rounds_won', 'Dust_2_Win_percent', 'Dust_2_Pistol_rounds', 'Dust_2_Pistol_rounds_won', 'Dust_2_Pistol_round_win_percent', 'Inferno_Times_played', 'Inferno_Wins', 'Inferno_Draws', 'Inferno_Losses', 'Inferno_Total_rounds_played', 'Inferno_Rounds_won', 'Inferno_Win_percent', 'Inferno_Pistol_rounds', 'Inferno_Pistol_rounds_won', 'Inferno_Pistol_round_win_percent', 'Mirage_Times_played', 'Mirage_Wins', 'Mirage_Draws', 'Mirage_Losses', 'Mirage_Total_rounds_played', 'Mirage_Rounds_won', 'Mirage_Win_percent', 'Mirage_Pistol_rounds', 'Mirage_Pistol_rounds_won', 'Mirage_Pistol_round_win_percent', 'Nuke_Times_played', 'Nuke_Wins', 'Nuke_Draws', 'Nuke_Losses', 'Nuke_Total_rounds_played', 'Nuke_Rounds_won', 'Nuke_Win_percent', 'Nuke_Pistol_rounds', 'Nuke_Pistol_rounds_won', 'Nuke_Pistol_round_win_percent', 'Overpass_Times_played', 'Overpass_Wins', 'Overpass_Draws', 'Overpass_Losses', 'Overpass_Total_rounds_played', 'Overpass_Rounds_won', 'Overpass_Win_percent', 'Overpass_Pistol_rounds', 'Overpass_Pistol_rounds_won', 'Overpass_Pistol_round_win_percent', 'Season_Times_played', 'Season_Wins', 'Season_Draws', 'Season_Losses', 'Season_Total_rounds_played', 'Season_Rounds_won', 'Season_Win_percent', 'Season_Pistol_rounds', 'Season_Pistol_rounds_won', 'Season_Pistol_round_win_percent', 'Train_Times_played', 'Train_Wins', 'Train_Draws', 'Train_Losses', 'Train_Total_rounds_played', 'Train_Rounds_won', 'Train_Win_percent', 'Train_Pistol_rounds', 'Train_Pistol_rounds_won', 'Train_Pistol_round_win_percent', 'Tuscan_Times_played', 'Tuscan_Wins', 'Tuscan_Draws', 'Tuscan_Losses', 'Tuscan_Total_rounds_played', 'Tuscan_Rounds_won', 'Tuscan_Win_percent', 'Tuscan_Pistol_rounds', 'Tuscan_Pistol_rounds_won', 'Tuscan_Pistol_round_win_percent', 'Vertigo_Times_played', 'Vertigo_Wins', 'Vertigo_Draws', 'Vertigo_Losses', 'Vertigo_Total_rounds_played', 'Vertigo_Rounds_won', 'Vertigo_Win_percent', 'Vertigo_Pistol_rounds', 'Vertigo_Pistol_rounds_won', 'Vertigo_Pistol_round_win_percent', 'URL'),
+        ('ID', 'Team', 'Rating', 'Cache_Times_played', 'Cache_Wins', 'Cache_Draws', 'Cache_Losses', 'Cache_Total_rounds_played', 'Cache_Rounds_won', 'Cache_Win_percent', 'Cache_Pistol_rounds', 'Cache_Pistol_rounds_won', 'Cache_Pistol_round_win_percent', 'Cache_CT_round_win_percent', 'Cache_T_round_win_percent', 'Cobblestone_Times_played', 'Cobblestone_Wins', 'Cobblestone_Draws', 'Cobblestone_Losses', 'Cobblestone_Total_rounds_played', 'Cobblestone_Rounds_won', 'Cobblestone_Win_percent', 'Cobblestone_Pistol_rounds', 'Cobblestone_Pistol_rounds_won', 'Cobblestone_Pistol_round_win_percent', 'Cobblestone_CT_round_win_percent', 'Cobblestone_T_round_win_percent', 'Dust_2_Times_played', 'Dust_2_Wins', 'Dust_2_Draws', 'Dust_2_Losses', 'Dust_2_Total_rounds_played', 'Dust_2_Rounds_won', 'Dust_2_Win_percent', 'Dust_2_Pistol_rounds', 'Dust_2_Pistol_rounds_won', 'Dust_2_Pistol_round_win_percent', 'Dust_2_CT_round_win_percent', 'Dust_2_T_round_win_percent', 'Inferno_Times_played', 'Inferno_Wins', 'Inferno_Draws', 'Inferno_Losses', 'Inferno_Total_rounds_played', 'Inferno_Rounds_won', 'Inferno_Win_percent', 'Inferno_Pistol_rounds', 'Inferno_Pistol_rounds_won', 'Inferno_Pistol_round_win_percent', 'Inferno_CT_round_win_percent', 'Inferno_T_round_win_percent', 'Mirage_Times_played', 'Mirage_Wins', 'Mirage_Draws', 'Mirage_Losses', 'Mirage_Total_rounds_played', 'Mirage_Rounds_won', 'Mirage_Win_percent', 'Mirage_Pistol_rounds', 'Mirage_Pistol_rounds_won', 'Mirage_Pistol_round_win_percent', 'Mirage_CT_round_win_percent', 'Mirage_T_round_win_percent', 'Nuke_Times_played', 'Nuke_Wins', 'Nuke_Draws', 'Nuke_Losses', 'Nuke_Total_rounds_played', 'Nuke_Rounds_won', 'Nuke_Win_percent', 'Nuke_Pistol_rounds', 'Nuke_Pistol_rounds_won', 'Nuke_Pistol_round_win_percent', 'Nuke_CT_round_win_percent', 'Nuke_T_round_win_percent', 'Overpass_Times_played', 'Overpass_Wins', 'Overpass_Draws', 'Overpass_Losses', 'Overpass_Total_rounds_played', 'Overpass_Rounds_won', 'Overpass_Win_percent', 'Overpass_Pistol_rounds', 'Overpass_Pistol_rounds_won', 'Overpass_Pistol_round_win_percent', 'Overpass_CT_round_win_percent', 'Overpass_T_round_win_percent', 'Season_Times_played', 'Season_Wins', 'Season_Draws', 'Season_Losses', 'Season_Total_rounds_played', 'Season_Rounds_won', 'Season_Win_percent', 'Season_Pistol_rounds', 'Season_Pistol_rounds_won', 'Season_Pistol_round_win_percent', 'Season_CT_round_win_percent', 'Season_T_round_win_percent', 'Train_Times_played', 'Train_Wins', 'Train_Draws', 'Train_Losses', 'Train_Total_rounds_played', 'Train_Rounds_won', 'Train_Win_percent', 'Train_Pistol_rounds', 'Train_Pistol_rounds_won', 'Train_Pistol_round_win_percent', 'Train_CT_round_win_percent', 'Train_T_round_win_percent', 'Tuscan_Times_played', 'Tuscan_Wins', 'Tuscan_Draws', 'Tuscan_Losses', 'Tuscan_Total_rounds_played', 'Tuscan_Rounds_won', 'Tuscan_Win_percent', 'Tuscan_Pistol_rounds', 'Tuscan_Pistol_rounds_won', 'Tuscan_Pistol_round_win_percent', 'Tuscan_CT_round_win_percent', 'Tuscan_T_round_win_percent', 'Vertigo_Times_played', 'Vertigo_Wins', 'Vertigo_Draws', 'Vertigo_Losses', 'Vertigo_Total_rounds_played', 'Vertigo_Rounds_won', 'Vertigo_Win_percent', 'Vertigo_Pistol_rounds', 'Vertigo_Pistol_rounds_won', 'Vertigo_Pistol_round_win_percent', 'Vertigo_CT_round_win_percent', 'Vertigo_T_round_win_percent', 'URL'),
         ('Build',))
-        self.__new_columns_tables = ('URL', 'Cache_Times_played', 'Cache_Wins', 'Cache_Draws', 'Cache_Losses', 'Cache_Total_rounds_played', 'Cache_Rounds_won', 'Cache_Win_percent', 'Cache_Pistol_rounds', 'Cache_Pistol_rounds_won', 'Cache_Pistol_round_win_percent', 'Cobblestone_Times_played', 'Cobblestone_Wins', 'Cobblestone_Draws', 'Cobblestone_Losses', 'Cobblestone_Total_rounds_played', 'Cobblestone_Rounds_won', 'Cobblestone_Win_percent', 'Cobblestone_Pistol_rounds', 'Cobblestone_Pistol_rounds_won', 'Cobblestone_Pistol_round_win_percent', 'Season_Times_played', 'Season_Wins', 'Season_Draws', 'Season_Losses', 'Season_Total_rounds_played', 'Season_Rounds_won', 'Season_Win_percent', 'Season_Pistol_rounds', 'Season_Pistol_rounds_won', 'Season_Pistol_round_win_percent', 'Tuscan_Times_played', 'Tuscan_Wins', 'Tuscan_Draws', 'Tuscan_Losses', 'Tuscan_Total_rounds_played', 'Tuscan_Rounds_won', 'Tuscan_Win_percent', 'Tuscan_Pistol_rounds', 'Tuscan_Pistol_rounds_won', 'Tuscan_Pistol_round_win_percent')
-        self.__tables_db = {7: 'matches_upcoming', 9: 'matches_completed', 29: 'players', 114: 'teams'}
-        self.__key_words = {7: 'match', 9: 'match', 29: 'player', 114: 'team'}
+        self.__new_columns_tables = ('Tournament', 'URL', 'Cache_Times_played', 'Cache_Wins', 'Cache_Draws', 'Cache_Losses', 'Cache_Total_rounds_played', 'Cache_Rounds_won', 'Cache_Win_percent', 'Cache_Pistol_rounds', 'Cache_Pistol_rounds_won', 'Cache_Pistol_round_win_percent', 'Cache_CT_round_win_percent', 'Cache_T_round_win_percent', 'Cobblestone_Times_played', 'Cobblestone_Wins', 'Cobblestone_Draws', 'Cobblestone_Losses', 'Cobblestone_Total_rounds_played', 'Cobblestone_Rounds_won', 'Cobblestone_Win_percent', 'Cobblestone_Pistol_rounds', 'Cobblestone_Pistol_rounds_won', 'Cobblestone_Pistol_round_win_percent', 'Cobblestone_CT_round_win_percent', 'Cobblestone_T_round_win_percent', 'Dust_2_CT_round_win_percent', 'Dust_2_T_round_win_percent', 'Inferno_CT_round_win_percent', 'Inferno_T_round_win_percent', 'Mirage_CT_round_win_percent', 'Mirage_T_round_win_percent', 'Nuke_CT_round_win_percent', 'Nuke_T_round_win_percent', 'Overpass_CT_round_win_percent', 'Overpass_T_round_win_percent', 'Season_Times_played', 'Season_Wins', 'Season_Draws', 'Season_Losses', 'Season_Total_rounds_played', 'Season_Rounds_won', 'Season_Win_percent', 'Season_Pistol_rounds', 'Season_Pistol_rounds_won', 'Season_Pistol_round_win_percent', 'Season_CT_round_win_percent', 'Season_T_round_win_percent', 'Train_CT_round_win_percent', 'Train_T_round_win_percent', 'Tuscan_Times_played', 'Tuscan_Wins', 'Tuscan_Draws', 'Tuscan_Losses', 'Tuscan_Total_rounds_played', 'Tuscan_Rounds_won', 'Tuscan_Win_percent', 'Tuscan_Pistol_rounds', 'Tuscan_Pistol_rounds_won', 'Tuscan_Pistol_round_win_percent', 'Tuscan_CT_round_win_percent', 'Tuscan_T_round_win_percent', 'Vertigo_CT_round_win_percent', 'Vertigo_T_round_win_percent')
+        self.__tables_db = {8: 'matches_upcoming', 10: 'matches_completed', 29: 'players', 136: 'teams'}
+        self.__key_words = {8: 'match', 10: 'match', 29: 'player', 136: 'team'}
         self.__create_tables_commands = (
-        """CREATE TABLE matches_upcoming({} int, {} text, {} text, {} text, {} int, {} text, {} text)""".format(*self.__columns_tables[0]),
-        """CREATE TABLE matches_completed({} int, {} text, {} text, {} text, {} int, {} text, {} text, {} text, {} text)""".format(*self.__columns_tables[1]),
+        """CREATE TABLE matches_upcoming({} int, {} text, {} text, {} text, {} text, {} int, {} text, {} text)""".format(*self.__columns_tables[0]),
+        """CREATE TABLE matches_completed({} int, {} text, {} text, {} text, {} text, {} int, {} text, {} text, {} text, {} text)""".format(*self.__columns_tables[1]),
         """CREATE TABLE players({} int, {} text, {} text, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} text)""".format(*self.__columns_tables[2]),
-        """CREATE TABLE teams({} int, {} text, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} text)""".format(*self.__columns_tables[3]),
+        """CREATE TABLE teams({} int, {} text, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} int, {} text)""".format(*self.__columns_tables[3]),
         """CREATE TABLE DB_version({} int)""".format(*self.__columns_tables[4]))
 
     def __del__(self):
@@ -506,129 +642,161 @@ class Database(Program):
         if (check_tables == [True, True, True, True, True]):
             """If the database has all tables, they will be checked for the contents of all columns"""
             """Если БД имеет все таблицы, то они будут проверены на содержание всех колонок"""
-            columns_exist = self.check_columns_tables(5)
+            columns_exist = self.__check_columns_tables(5)
             if (columns_exist):
                 DB_version = self.get_DB_build()
-                if (DB_version == 3):
-                    print('Database build 3.')
-                    print('Database is ready.')
+                if (DB_version == 4):
+                    self.log_and_print('Database build 4.')
+                    self.log_and_print('Database is ready.')
                     return True
+                elif (DB_version == 3):
+                    self.log_and_print('Database is outdated (build 3)! Updating...')
+                    success_update = self.__update_DB_from_3_build()
+                    if (success_update == False):
+                        return False
+                    elif (success_update == 'Cancelled'): # it looks very stupid
+                        return 'Update cancelled.'
+                    else:
+                        self.log_and_print('Success updated.')
+                        return True
                 elif (DB_version == 2):
-                    print('Database is outdated (build 2)! Updating...')
-                    success_update = self.update_DB_from_2_build()
+                    self.log_and_print('Database is outdated (build 2)! Updating...')
+                    success_update = self.__update_DB_from_2_build()
                     if (success_update == False):
                         return False
                     else:
-                        print('Success updated.')
-                        return True
+                        success_update = self.__update_DB_from_3_build()
+                        if (success_update == False):
+                            return False
+                        elif (success_update == 'Cancelled'): # it looks very stupid
+                            return 'Update cancelled.'
+                        else:
+                            self.log_and_print('Success updated.')
+                            return True
                 elif (DB_version == 1):
-                    print('Wrong value of version database detected (when database was build 1 it has not table DB_version)! Parcer cannot use this database.')
+                    self.log_and_print('Wrong value of version database detected (when database was build 1 it has not table DB_version)! Parcer cannot use this database.')
                     return False
                 elif (DB_version > 3):
-                    print('This program using the database build 3, but build {} detected! Parcer cannot use this database.'.format(str(DB_version)))
+                    self.log_and_print('This program using the database build 3, but build {} detected! Parcer cannot use this database.'.format(str(DB_version)))
                     return False
                 else:
-                    print('Wrong value of version database detected! Parcer cannot use this database.')
+                    self.log_and_print('Wrong value of version database detected! Parcer cannot use this database.')
                     return False
             else:
-                print('DB Error: some columns not exist.')
+                self.log_and_print('DB Error: some columns not exist.')
                 return False
         elif (check_tables == [True, True, True, True, False]):
             """If the database does not have a table with the version of the database, it will be created, and the database is updated to build 2. But before that the columns in the tables will be checked"""
             """Если БД не имеет таблицы с версией БД, то она будет создана, а БД обновлена до билда 2. Но перед этим будут проверены колонки в таблицах"""
-            print('Database is outdated (legacy)! Updating...')
-            columns_exist = self.check_columns_tables(4)
+            self.log_and_print('Database is outdated (legacy)! Updating...')
+            columns_exist = self.__check_columns_tables(4)
             if (columns_exist):
-                success_update = self.update_DB_from_legacy()
+                success_update = self.__update_DB_from_legacy()
                 if (success_update):
-                    print('Success updated to build 2.')
-                    success_update = self.update_DB_from_2_build()
+                    self.log_and_print('Success updated to build 2.')
+                    success_update = self.__update_DB_from_2_build()
                     if (success_update):
-                        print('Success updated.')
-                        return True
+                        success_update = self.__update_DB_from_3_build()
+                        if (success_update):
+                            self.log_and_print('Success updated.')
+                            return True
+                        elif (success_update == 'Cancelled'): # it looks very stupid
+                            return 'Update cancelled.'
+                        else:
+                            return False
                     else:
                         return False
                     return True
                 else:
                     return False
             else:
-                print('DB Error: some columns not exist.')
+                self.log_and_print('DB Error: some columns not exist.')
                 return False
         elif (check_tables == [False, False, False, False, False]):
             """If the database does not have all the tables, they will be created"""
             """Если БД не имеет всех таблиц, то они будут созданы"""
-            print('Creating database...')
-            success_creating = self.create()
+            self.log_and_print('Creating database...')
+            success_creating = self.__create()
             return success_creating
         else:
-            print('Database is corrupted!')
+            self.log_and_print('Database is corrupted!')
             return False
 
     def write_data(self, data):
-        """Writing data to the database: the size of the data tuple can only be 7, 9, 29, or 114.
+        """Writing data to the database: the size of the data tuple can only be 8, 10, 29, or 136.
         The sizes of input tuples can be changed in future versions of the parser.
         If the data is already exist in the table, it will be automatically updated."""
-        """Запись данных в БД: размер кортежа data может быть только = 7, 9, 29 или 114.
+        """Запись данных в БД: размер кортежа data может быть только = 8, 10, 29 или 136.
         Размеры принимаемых кортежей могут быть изменены в будущих версиях парсера.
         Если данные уже существуют в таблице, они будут автоматически обновлены."""
-        if ((len(data) == 7) or (len(data) == 9) or (len(data) == 29) or (len(data) == 114)):
+        if ((len(data) == 8) or (len(data) == 10) or (len(data) == 29) or (len(data) == 136)):
             self.__cursor.execute("SELECT ID FROM {};".format(self.__tables_db[len(data)]))
             IDs = self.__cursor.fetchall()
             IDs_list = [IDs[i][0] for i in range(len(IDs))]
             Data_exist = IDs_list.count(int(data[0]))
+            if (len(data) == 8) or (len(data) == 10):
+                title = '{} vs {}'.format(data[1], data[2])
+            elif (len(data) == 29) or (len(data) == 136):
+                title = data[1]
             if (Data_exist):
-                print('This {} already exist. Data will be updated...'.format(self.__key_words[len(data)]))
+                self.log_and_print('{} data of {} already exist. Data will be updated...'.format(self.__key_words[len(data)], title))
                 self.update_data(data)
             else:
-                if (len(data) == 7): # Upcoming match
-                    self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?);", data)
-                elif (len(data) == 9): # Completed match
-                    self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+                if (len(data) == 8): # Upcoming match
+                    self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?, ?);", data)
+                elif (len(data) == 10): # Completed match
+                    self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
                 elif (len(data) == 29): # Player data
                     self.__cursor.execute("INSERT INTO players VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
-                elif (len(data) == 114): # Team data
+                elif (len(data) == 136): # Team data
 
-                    self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+                    self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
                 self.__conn.commit()
+                self.log_and_print('{} data of {} added into database.'.format(self.__key_words[len(data)].title(), title))
             return True
         else:
-            print('Error: Size of "data" not a 7, 9, 29, or 114; data is not added into database.')
+            self.log_and_print('Error: Size of "data" not a 8, 10, 29, or 136; data is not added into database.')
             return False
 
-    def update_data(self, data):
-        """Updating data in the database: the size of the data tuple can only be = 7, 9, 29, or 114.
+    def update_data(self, data): # Merge with write_data
+        """Updating data in the database: the size of the data tuple can only be = 8, 10, 29, or 136.
         The sizes of accepted tuples will be changed in future versions of the parser.
         Determining the row whose data will be updated is performed by checking the ID match.
         Updating is carried out by deleting the old row and adding a new one."""
-        """Обновление данных в БД: размер кортежа data может быть только = 7, 9, 29, или 114.
+        """Обновление данных в БД: размер кортежа data может быть только = 8, 10, 29, или 136.
         Размеры принимаемых кортежей будут изменены в будущих версиях парсера.
         Определение строки, данные которой будут обновляться, осуществляется проверкой совпадения ID.
         Обновление осуществляется путём удаления старой строки и добавлением новой."""
-        if ((len(data) == 7) or (len(data) == 9) or (len(data) == 29) or (len(data) == 114)):
+        if ((len(data) == 8) or (len(data) == 10) or (len(data) == 29) or (len(data) == 136)):
             self.__cursor.execute("SELECT ID FROM {} WHERE ID = {};".format(self.__tables_db[len(data)], data[0]))
             founded_ID = self.__cursor.fetchall()
             if (founded_ID):
                 err = self.delete_data(self.__tables_db[len(data)], founded_ID[0][0])
+                if (len(data) == 8) or (len(data) == 10):
+                    title = '{} vs {}'.format(data[1], data[2])
+                elif (len(data) == 29) or (len(data) == 136):
+                    title = data[1]
                 if (err == 200):
-                    if (len(data) == 7): # Upcoming match
-                        self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?);", data)
-                    elif (len(data) == 9): # Completed match
-                        self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+                    if (len(data) == 8): # Upcoming match
+                        self.__cursor.execute("INSERT INTO matches_upcoming VALUES(?, ?, ?, ?, ?, ?, ?, ?);", data)
+                    elif (len(data) == 10): # Completed match
+                        self.__cursor.execute("INSERT INTO matches_completed VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
                     elif (len(data) == 29): # Player data
                         self.__cursor.execute("INSERT INTO players VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
-                    elif (len(data) == 114): # Team data
+                    elif (len(data) == 136): # Team data
 
-                        self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
+                        self.__cursor.execute("INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", data)
                     self.__conn.commit()
+                    self.log_and_print('{} data of {} updated.'.format(self.__key_words[len(data)].title(), title))
                     return True
                 else:
-                    print('While deleting old data getting error. Changes cancelled.')
+                    self.log_and_print('While deleting old data getting error. Changes cancelled.')
                     return False
             else:
-                print('Error: URL from "data" not founded; data is not updated.')
+                self.log_and_print('Error: URL from "data" not founded; data is not updated.')
                 return False
         else:
-            print('Error: Size of "data" not a 7, 9, 29, or 114; data is not updated.')
+            self.log_and_print('Error: Size of "data" not a 8, 10, 29, or 136; data is not updated.')
             return False
 
     def delete_data(self, table, ID):
@@ -643,13 +811,13 @@ class Database(Program):
                     self.__conn.commit()
                     return 200
                 else:
-                    print('Error: "ID" not founded; data is not deleted.')
+                    self.log_and_print('Error: "ID" not founded; data is not deleted.')
                     return 1414
             else:
-                print('Error: "ID" is not a number; data is not deleted.')
+                self.log_and_print('Error: "ID" is not a number; data is not deleted.')
                 return 1415
         else:
-            print('Error: "table" not founded; data is not deleted.')
+            self.log_and_print('Error: "table" not founded; data is not deleted.')
             return 6461
 
     def delete_all_data_from_table(self, table):
@@ -658,10 +826,10 @@ class Database(Program):
         if (self.__tables_tuple.count(table) == 1):
             self.__cursor.execute("DELETE FROM {};".format(table))
             self.__conn.commit()
-            print('Data in table {} fully deleted.'.format(table))
+            self.log_and_print('Data in table {} fully deleted.'.format(table))
             return 200
         else:
-            print('Error: "table" not founded; data is not deleted.')
+            self.log_and_print('Error: "table" not founded; data is not deleted.')
             return 6461
 
     def get_urls_upcomig_matches(self):
@@ -669,15 +837,9 @@ class Database(Program):
         """Получение URL предстоящих матчей."""
         self.__cursor.execute("SELECT URL FROM matches_upcoming ORDER BY Date_match;")
         data = self.__cursor.fetchall()
-        if (data):
-            for i in range(len(data)):
-                data[i] = data[i][0]
-            data = tuple(data)
-            return data
-        else:
-            return data
+        return tuple([data[i][0] for i in range(len(data))])
 
-    def update_DB_from_legacy(self):
+    def __update_DB_from_legacy(self):
         """Updating DB from legacy version. Support for previous versions will soon be discontinued.""" # Legacy version was never released to the public, lol
         """Обновление БД с устаревшей версии. Поддержка предыдущих версий вскоре будет прекращена."""
         for i in range(4):
@@ -696,14 +858,13 @@ class Database(Program):
         self.__conn.commit()
         return True
 
-    def update_DB_from_2_build(self):
+    def __update_DB_from_2_build(self):
         """Updating DB from build 2. Support for previous versions will soon be discontinued."""
         """Обновление БД с билда 2. Поддержка предыдущих версий вскоре будет прекращена."""
-        tables_names = ('players', 'teams', 'matches_upcoming', 'matches_completed')
         self.__cursor.execute('SELECT Build FROM DB_version;')
         DB_version = self.__cursor.fetchall()
         if (DB_version[0][0] == 3):
-            print('Database build is 3.')
+            self.log_and_print('Database build is 3.')
         elif (DB_version[0][0] == 2):
             for i in range(len(self.__tables_tuple) - 1):
                 self.__cursor.execute('ALTER TABLE {} RENAME TO {}_old;'.format(self.__tables_tuple[i], self.__tables_tuple[i]))
@@ -727,10 +888,104 @@ class Database(Program):
             self.__conn.commit()
             return True
         else:
-            print ('Error while updating database: value of version database is corrupted (got version = "{}").'.format(DB_version))
+            self.log_and_print('Error while updating database: value of version database is corrupted (got version = "{}").'.format(DB_version))
             return False
 
-    def check_columns_tables(self, count_tables):
+    def __update_DB_from_3_build(self):
+        """Updating DB from build 3. Support for previous versions will soon be discontinued."""
+        """Обновление БД с билда 3. Поддержка предыдущих версий вскоре будет прекращена."""
+        tables_names = ('teams', 'matches_upcoming', 'matches_completed')
+        self.__cursor.execute('SELECT Build FROM DB_version;')
+        DB_version = self.__cursor.fetchall()
+        if (DB_version[0][0] == 4):
+            self.log_and_print('Database build is 4.')
+        elif (DB_version[0][0] == 3):
+            long_update = self.question('WARNING! Upgrading to build 4 takes a very long time ({}) and requires a stable Internet connection. Continue? (Y/n): '.format(self.__calc_download_tournaments()), True)
+            if (long_update):
+                for i in range(len(tables_names)):
+                    self.__cursor.execute('ALTER TABLE {} RENAME TO {}_old;'.format(tables_names[i], tables_names[i]))
+                    if (i == 0):
+                        self.__cursor.execute(self.__create_tables_commands[3])
+                        self.__cursor.execute('SELECT * FROM teams_old;')
+                        old_data = self.__cursor.fetchall()
+                        new_data = [list(old_data[j][:13]) for j in range(len(old_data))]
+                        for j in range(len(new_data)):
+                            new_data[j].extend([0]*2)
+                            for k in range(10):
+                                new_data[j].extend(old_data[j][13+10*k:23+10*k])
+                                new_data[j].extend([0]*2)
+                            new_data[j].append(old_data[j][113])
+                            self.__cursor.execute('INSERT INTO teams VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', new_data[j])
+                    else:
+                        self.__cursor.execute(self.__create_tables_commands[i - 1])
+                        self.__cursor.execute('SELECT * FROM {}_old;'.format(tables_names[i]))
+                        old_data = self.__cursor.fetchall()
+                        new_data = [list(old_data[j][:4]) for j in range(len(old_data))]
+                        for j in range(len(new_data)):
+                            new_data[j].append('NULL')
+                            new_data[j].extend(old_data[j][4:])
+                            if (i == 1):
+                                self.__cursor.execute('INSERT INTO {} VALUES(?, ?, ?, ?, ?, ?, ?, ?);'.format(tables_names[i]), new_data[j])
+                            elif (i == 2):
+                                self.__cursor.execute('INSERT INTO {} VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);'.format(tables_names[i]), new_data[j])
+                    self.__cursor.execute('DROP TABLE {}_old;'.format(tables_names[i]))
+                self.__cursor.execute('UPDATE DB_version SET Build = 4 WHERE Build = 3;')
+                for i in range(2):
+                    self.__cursor.execute('SELECT * FROM {};'.format(tables_names[i + 1]))
+                    matches_info = self.__cursor.fetchall()
+                    matches_IDs = tuple([matches_info[j][0] for j in range(len(matches_info))])
+                    matches_urls = tuple([matches_info[j][7 + i * 2] for j in range(len(matches_info))])
+                    matches_titles = tuple(['{} vs {}'.format(matches_info[j][1], matches_info[j][2]) for j in range(len(matches_info))])
+                    matches_dates = tuple([matches_info[j][3] for j in range(len(matches_info))])
+                    tournaments_download = self.__download_tournaments(matches_urls, matches_titles, matches_dates)
+                    if (tournaments_download):
+                        for j in range(len(tournaments_download)):
+                            self.__cursor.execute('UPDATE {} SET Tournament = "{}" WHERE ID = {};'.format(tables_names[i + 1], tournaments_download[j], matches_IDs[j]))
+                            self.__conn.commit()
+                    else:
+                        return False
+                return True
+            else:
+                return 'Cancelled' # it looks very stupid
+        else:
+            self.log_and_print('Error while updating database: value of version database is corrupted (got version = "{}").'.format(DB_version))
+            return False
+
+    def __calc_download_tournaments(self):
+        self.__cursor.execute('SELECT * FROM matches_upcoming;')
+        count_upcoming_matches = len(self.__cursor.fetchall())
+        self.__cursor.execute('SELECT * FROM matches_completed;')
+        count_completed_matches = len(self.__cursor.fetchall())
+        count_matches = (count_upcoming_matches + count_completed_matches) * 2
+        if (count_matches > 60):
+            minutes = count_matches // 60
+            seconds = count_matches - minutes * 60
+            if (minutes > 60):
+                hours = minutes // 60
+                minutes -= hours * 60
+                time_str = '{} hours {} minutes {} seconds'.format(str(hours), str(minutes), str(seconds))
+            else:
+                time_str = '{} minutes {} seconds'.format(str(minutes), str(seconds))
+        else:
+            time_str = '{} seconds'.format(str(count_matches))
+        return time_str
+
+    def __download_tournaments(self, urls, titles, dates):
+        if (type(urls) == tuple) or (type(urls) == list):
+            tournaments = []
+            for i in range(len(urls)):
+                match = Match()
+                success_download = match.download_data(urls[i], titles[i], dates[i], None)
+                if (success_download == 200) or (success_download == 5136) or (success_download == 4313):
+                    tournaments.append(match.get_tournament())
+                else:
+                    return None
+            return tuple(tournaments)
+        else:
+            self.log_and_print('Error while downloading tournaments: wrong input array of URLs.')
+            return None
+
+    def __check_columns_tables(self, count_tables):
         """Checking for columns in the table."""
         """Проверка наличия столбцов в таблице."""
         if (count_tables == 4):
@@ -748,10 +1003,10 @@ class Database(Program):
                     if (names_columns[j-back] != self.__columns_tables[i][j]):
                         if (names_columns[j-back] == 'Link') and ((DB_version == 2) or (DB_version == 1)):
                             continue
-                        elif (self.__new_columns_tables.count(self.__columns_tables[i][j]) == 1) and ((DB_version == 2) or (DB_version == 1)):
+                        elif (self.__new_columns_tables.count(self.__columns_tables[i][j]) == 1) and ((DB_version == 3) or (DB_version == 2) or (DB_version == 1)):
                             back += 1
                             continue
-                        print('Column {} from table {} not exist!'.format(self.__columns_tables[i][j], self.__tables_tuple[i]))
+                        self.log_and_print('Column {} from table {} not exist!'.format(self.__columns_tables[i][j], self.__tables_tuple[i]))
                         success = False
                         break
                 back = 0
@@ -761,7 +1016,7 @@ class Database(Program):
         else:
             return False
 
-    def create(self):
+    def __create(self):
         """Creating an empty database."""
         """Создание пустой БД."""
         try:
@@ -771,10 +1026,10 @@ class Database(Program):
             self.__conn.commit()
             return True
         except sqlite3.Error as e:
-            print("Error while creating database: {}".format(str(e)))
+            self.log_and_print("Error while creating database: {}".format(str(e)))
             return False
         except Exception as e:
-            print("Unknown error while creating database: {}".format(str(e)))
+            self.log_and_print("Unknown error while creating database: {}".format(str(e)))
             return False
 
     def get_ids_upcoming_matches(self):
@@ -795,10 +1050,10 @@ class Database(Program):
         if (type(ID_match) == int) and (type(new_url) == str):
             self.__cursor.execute('UPDATE matches_upcoming SET URL = "{}" WHERE ID = {};'.format(new_url, str(ID_match)))
             self.__conn.commit()
-            print('Changed.')
+            self.log_and_print('Changed.')
             return True
         else:
-            print('Error while updating URL in matches_upcoming: wrong input data into function(getted ID_match = "{}" and new_url = "{}")'.format(ID_match, new_url))
+            self.log_and_print('Error while updating URL in matches_upcoming: wrong input data into function(getted ID_match = "{}" and new_url = "{}")'.format(ID_match, new_url))
             return False
 
     def get_DB_build(self):
@@ -815,10 +1070,10 @@ class Database(Program):
             else:
                 return False
         except sqlite3.Error as e:
-            print("Error while getting build version database: {}".format(str(e)))
+            self.log_and_print("Error while getting build version database: {}".format(str(e)))
             return False
         except Exception as e:
-            print("Unknown error while getting build version database: {}".format(str(e)))
+            self.log_and_print("Unknown error while getting build version database: {}".format(str(e)))
             return False
 
     def get_teams_titles(self):
@@ -830,17 +1085,31 @@ class Database(Program):
         self.__cursor.execute('SELECT ID, Player, URL FROM players WHERE Current_Team = "{}" ORDER BY Current_Team;'.format(team))
         return tuple(self.__cursor.fetchall())
 
+    def get_titles_upcomig_matches(self):
+        self.__cursor.execute('SELECT Team_1, Team_2 FROM matches_upcoming ORDER BY Date_match;')
+        return tuple(self.__cursor.fetchall())
+
+    def get_dates_upcomig_matches(self):
+        self.__cursor.execute('SELECT Date_match FROM matches_upcoming ORDER BY Date_match;')
+        dates = self.__cursor.fetchall()
+        return tuple([dates[i][0] for i in range(len(dates))])
+
+    def get_tournaments_upcoming_matches(self):
+        self.__cursor.execute('SELECT Tournament FROM matches_upcoming ORDER BY Date_match;')
+        tournaments = self.__cursor.fetchall()
+        return tuple([tournaments[i][0] for i in range(len(tournaments))])
+
     def update_current_team(self, ID, current_team):
         try:
             self.__cursor.execute('UPDATE players SET Current_Team = "{}" WHERE ID = {};'.format(current_team, str(ID)))
             self.__conn.commit()
-            print('Changed successfully.')
+            self.log_and_print('Changed successfully.')
             return True
         except sqlite3.Error as e:
-            print("Error while updating current team of player: {}".format(str(e)))
+            self.log_and_print("Error while updating current team of player: {}".format(str(e)))
             return False
         except Exception as e:
-            print("Unknown error while updating current team of player: {}".format(str(e)))
+            self.log_and_print("Unknown error while updating current team of player: {}".format(str(e)))
             return False
 
 class Match(Program):
@@ -853,6 +1122,7 @@ class Match(Program):
         self.__ID = None
         self.__teams_titles = []
         self.__date = None
+        self.__tournament = None
         self.__format = None
         self.__maps = None
         self.__result_full = None
@@ -861,14 +1131,20 @@ class Match(Program):
         self.__urls_teams = []
         self.__urls_teams_stats = []
         self.__urls_players = [[], []]
+        self.__nicknames = [[], []]
+        self.__IDs_players = [[], []]
         self.__score_types = ('won', 'tie', 'lost')
         self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.lineup_url = ('/stats/lineup/maps?', 'minLineupMatch=3', '&startDate=')
 
-    def download_data(self, url):
+    def download_data(self, url, match_title, match_date, match_tournament):
         """Parsing match data."""
         """Парсинг данных матча."""
-        print('Uploading match data...')
+        self.log_and_print('Uploading match data...')
+        if (match_tournament):
+            self.log_and_print('Tournament: {}'.format(match_tournament))
+        self.log_and_print('Date: {}'.format(match_date))
+        self.log_and_print('Match: {}'.format(match_title))
         self.__soup = self.download_html(url) # https://www.hltv.org/matches/[ID]/[matchName]
         if (type(self.__soup) == int):
             self.status = self.__soup
@@ -879,48 +1155,69 @@ class Match(Program):
             self.status = 1470
             return self.status
         self.status = 5136
+        event = self.__soup.find('div', class_='event text-ellipsis')
+        if (event):
+            self.__tournament = event.find('a').text
+        else:
+            self.log_and_print('Tournament of this match are still unknown.')
+            return 5136
+        if (not match_tournament):
+            self.log_and_print('Tournament: {}'.format(self.__tournament))
         if (self.__soup.find('div', class_='time')):
             self.__date = datetime.fromtimestamp(float(self.__soup.find('div', class_='time')['data-unix'])/1000).isoformat(' ') + '.000' # Местное время
-            print('Date: ' + self.__date)
+            if (self.__date != match_date):
+                self.log_and_print('Date changed to {}'.format(self.__date))
         else:
-            print('Time of this match are still unknown. Skipping...')
+            self.log_and_print('Time of this match are still unknown.')
             return 5136
         self.__teams_titles = (self.__soup_get_team_info(True, False), self.__soup_get_team_info(False, False))
-        if (self.__teams_titles[0]) and (self.__teams_titles[1]):
-            print('Match: {} vs {}'.format(self.__teams_titles[0], self.__teams_titles[1]))
-        else:
+        if (not (self.__teams_titles[0] and self.__teams_titles[1])):
             return 5136
+        if (self.__teams_titles[0] + ' vs ' + self.__teams_titles[1] != match_title):
+            teams_old = match_title.split(' vs ')
+            for i in range(2):
+                if (teams_old[i] != self.__teams_titles[i]):
+                    self.log_and_print('Team {} changed to {}'.format(str(i + 1), self.__teams_titles[i]))
         self.__urls_teams = (self.__soup_get_team_info(True, True), self.__soup_get_team_info(False, True))
-        if (not self.__urls_teams[0]) or (not self.__urls_teams[1]):
+        if (not (self.__urls_teams[0] and self.__urls_teams[1])):
             return 5136
         self.__format = self.__soup_get_match_format()
         if (self.__format):
-            print('Format: Best of ' + str(self.__format))
+            self.log_and_print('Format: Best of ' + str(self.__format))
         else:
             return 5136
         self.__maps = self.__soup_get_maps()
         if (self.__maps):
-            print('Maps: ' + self.__maps)
+            self.log_and_print('Maps: ' + self.__maps)
         else:
             return 5136
-        self.status = self.__soup_get_match_status()
-        if (self.status == 10001) or (self.status == 10002):
-            if (self.status == 10001):
+        IDs_and_nicknames = (self.__soup_get_nicknames_and_IDs(True), self.__soup_get_nicknames_and_IDs(False))
+        if (IDs_and_nicknames[0]) and (IDs_and_nicknames[1]):
+            self.__IDs_players[0] = IDs_and_nicknames[0][0]
+            self.__IDs_players[1] = IDs_and_nicknames[1][0]
+            self.__nicknames[0] = IDs_and_nicknames[0][1]
+            self.__nicknames[1] = IDs_and_nicknames[1][1]
+        else:
+            return 5136
+        match_status = self.__soup_get_match_status()
+        if (match_status == 10001) or (match_status == 10002):
+            if (match_status == 10001):
                 self.__result_maps = self.__soup_get_result_maps()
                 if (not self.__result_maps):
                     return 5136
                 self.__result_full = self.__soup_get_result_full()
                 if (not self.__result_full):
                     return 5136
-            self.__urls_teams_stats = (self.__soup_get_url_team_stat(True), self.__soup_get_url_team_stat(False))
+            self.__urls_teams_stats = (self.__soup_get_url_team_stat(True, match_status), self.__soup_get_url_team_stat(False, match_status))
             if (not self.__urls_teams_stats[0]) or (not self.__urls_teams_stats[1]):
                 return 5136
-            self.__urls_players = (self.__soup_get_urls_team_stats_players(True), self.__soup_get_urls_team_stats_players(False))
+            self.__urls_players = (self.__soup_get_urls_team_stats_players(True, match_status), self.__soup_get_urls_team_stats_players(False, match_status))
             if (not self.__urls_players[0]) or (not self.__urls_players[1]):
                 return 5136
-        elif (self.status == 4313):
+        elif (match_status == 4313):
+            self.status = 4313
             return 4313
-        elif (self.status == 5136):
+        elif (match_status == 5136):
             return 5136
         self.status = 200
         return 200
@@ -930,14 +1227,14 @@ class Match(Program):
         """Получение данных матча."""
         if (self.status == 200):
             if ((self.__result_full == None) or (self.__result_maps == None)):
-                data = (self.__ID, *self.__teams_titles, self.__date, self.__format, self.__maps, self.__url)
+                data = (self.__ID, *self.__teams_titles, self.__date, self.__tournament, self.__format, self.__maps, self.__url)
             else:
-                data = (self.__ID, *self.__teams_titles, self.__date, self.__format, self.__maps, self.__result_full, self.__result_maps, self.__url)
+                data = (self.__ID, *self.__teams_titles, self.__date, self.__tournament, self.__format, self.__maps, self.__result_full, self.__result_maps, self.__url)
             return data
         elif (self.status == 4313):
             return {self.status: self.__ID}
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
             return self.status
 
     def get_urls_teams(self):
@@ -947,7 +1244,7 @@ class Match(Program):
             data = tuple([*self.__urls_teams])
             return data
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
             return None
 
     def get_urls_stats_teams(self):
@@ -957,7 +1254,7 @@ class Match(Program):
             data = tuple([*self.__urls_teams_stats])
             return data
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
 
     def get_urls_stats_players(self, team_bool):
         """Getting URLs players stats."""
@@ -968,10 +1265,31 @@ class Match(Program):
                 data = self.__urls_players[team[team_bool]]
                 return data
             else:
-                print('Error: got variable not "bool".')
+                self.log_and_print('Error: got variable not "bool".')
                 return None
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
+            return None
+
+    def get_teams_titles(self):
+        if (self.status == 200) or (self.status == 0):
+            return self.__teams_titles
+        else:
+            self.log_and_print('Data is corrupted.')
+            return None
+
+    def get_nicknames(self):
+        if (self.status == 200) or (self.status == 0):
+            return self.__nicknames
+        else:
+            self.log_and_print('Data is corrupted.')
+            return None
+
+    def get_tournament(self):
+        if (self.status == 200) or (self.status == 0) or (self.status == 5136) or (self.status == 4313):
+            return self.__tournament
+        else:
+            self.log_and_print('Data is corrupted.')
             return None
 
     def __soup_get_team_info(self, team_1, url_bool):
@@ -985,12 +1303,12 @@ class Match(Program):
                 if (team.find('a')):
                     return self.source_urls[0] + team.find('a')['href']
                 else:
-                    print('In this match, team {} URL are still unknown. Skipping...'.format(teams_dict[team_1]))
+                    self.log_and_print('In this match, team {} URL are still unknown.'.format(teams_dict[team_1]))
                     return None
             else:
                 return team.find(class_='teamName').text
         else:
-            print('In this match, the team {} are still unknown. Skipping...'.format(teams_dict[team_1]))
+            self.log_and_print('In this match, team {} are still unknown.'.format(teams_dict[team_1]))
             return None
 
     def __soup_get_match_format(self):
@@ -1002,10 +1320,10 @@ class Match(Program):
             if (text_map.count('Best of') == 1):
                 return int(text_map[8:9])
             else:
-                print('This match has unstandart or corrupt maps block. Skipping...')
+                self.log_and_print('This match has unstandart or corrupt maps block.')
                 return None
         else:
-            print('This match has not maps block. Skipping...')
+            self.log_and_print('This match has not maps block.')
             return None
 
     def __soup_get_maps(self):
@@ -1019,7 +1337,7 @@ class Match(Program):
                 maps_text += maps_list[i] + ', '
             return maps_text[0:len(maps_text)-2]
         else:
-            print('This match has unstandart or corrupt maps block. Skipping...')
+            self.log_and_print('This match has unstandart or corrupt maps block.')
             return None
 
     def __soup_get_match_status(self):
@@ -1030,15 +1348,15 @@ class Match(Program):
             if (match_status.text == 'Match over'):
                 return 10001
             elif (match_status.text == 'Match deleted'):
-                print('This match cancelled. Deleting...')
+                self.log_and_print('This match cancelled.')
                 return 4313
             elif (match_status.text == 'Match postponed'):
-                print('This match postponed. Skipping...')
+                self.log_and_print('This match postponed.')
                 return 5136
             else:
                 return 10002
         else:
-            print('This match has not div.countdown block. Skipping...')
+            self.log_and_print('This match has not div.countdown block.')
             return 5136
 
     def __soup_get_result_maps(self):
@@ -1051,7 +1369,7 @@ class Match(Program):
         f = 1
         while(not team_1_result):
             if (f > 2):
-                print("This match has not results maps or there's unstandart or broken block. Skipping...")
+                self.log_and_print("This match has not results maps or there's unstandart or broken block.")
                 return None
             team_1_result = team_1.find('div', class_=self.__score_types[f])
             team_2_result = team_2.find('div', class_=self.__score_types[2-f])
@@ -1069,7 +1387,7 @@ class Match(Program):
                 if (full_results):
                     full_result_str += '{}:{}, '.format(full_results[0].text, full_results[1].text)
                 else:
-                    print("This match has not result on map %d or there's unstandart or broken block. Skipping..." % i)
+                    self.log_and_print("This match has not result on map %d or there's unstandart or broken block." % i)
                     return None
             return full_result_str[0:len(full_result_str)-2]
         else:
@@ -1078,95 +1396,68 @@ class Match(Program):
                 for i in range(len(maps)):
                     maps[i] = maps[i].text
             else:
-                print("This match has not maps or broken block. Skipping...")
+                self.log_and_print("This match has not maps or broken block.")
                 return None
             if (maps.count('Default') > 0):
                 return 'Forfeit'
             else:
-                print("This match has not results per map or there's unstandart or broken block. Skipping...")
+                self.log_and_print("This match has not results per map or there's unstandart or broken block.")
                 return None
 
-    def __soup_get_url_team_stat(self, team_1):
+    def __soup_get_url_team_stat(self, team_1, match_status):
         """Parsing URL for team statistics (if team_1 = True - team 1, False - team 2). If the match is over, the URL is generated by the parser, since it is not on the page."""
         """Парсинг URL на статистику команды (если team_1 = True - команда 1, False - команда 2). Если матч окончен, URL генерируется парсером, так как на странице она отсутствует."""
         teams_dict = {True: 0, False: 1}
-        if (self.status == 10002):
+        if (match_status == 10002):
             teams_stats = self.__soup.find(class_='map-stats-infobox-header')
             if (teams_stats):
                 urls_teams_stats = teams_stats.find_all(class_='team')
                 if (urls_teams_stats):
                     return self.source_urls[0] + urls_teams_stats[teams_dict[team_1]].find('a')['href']
                 else:
-                    print('This match has not URL for team %d stat. Skipping...' % (teams_dict[team_1] + 1))
+                    self.log_and_print('This match has not URL for team %d stat.' % (teams_dict[team_1] + 1))
                     return None
             else:
-                print('This match has not URLs for teams stats. Skipping...')
+                self.log_and_print('This match has not URLs for teams stats.')
                 return None
-        elif (self.status == 10001):
-            lineups = self.__soup.find_all('div', class_='lineup standard-box')
-            if (lineups):
-                tr = lineups[teams_dict[team_1]].find_all('tr')
-                if (tr):
-                    players = tr[1].find_all('div', class_='flagAlign', attrs = {'data-player-id': True})
-                    if (players):
-                        if (len(players) == 5):
-                            IDs_players = []
-                            for i in range(5):
-                                if (players[i].text == '\nTBA\n') or (players[i].text == '\nTBD\n'):
-                                    print('This match has not player {} in team {}. Skipping...'.format(str(i + 1), str(teams_dict[team_1] + 1)))
-                                    return None
-                                else:
-                                    IDs_players.append('lineup=' + players[i]['data-player-id'] + '&')
-                            url = '{}{}{}{}{}{}{}{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *IDs_players, self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
-                            return url
-                        else:
-                            print('In this match team {} have less than 5 players. Skipping...'.format(str(teams_dict[team_1] + 1)))
-                            return None
-                    else:
-                        print('This match has not players blocks. Skipping...')
-                        return None
-                else:
-                    print("This match has not tr blocks. Skipping...")
-                    return None
-            else:
-                print("This match has not lineups blocks. Skipping...")
-                return None
-
+        elif (match_status == 10001):
+            url = '{}{}lineup={}&lineup={}&lineup={}&lineup={}&lineup={}&{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *self.__IDs_players[teams_dict[team_1]], self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
+            return url
         else:
-            print("Error while getting team stat URL: status match is incorrect. Skipping...")
+            self.log_and_print("Error while getting team stat URL: status match is incorrect.")
             return None
 
-    def __soup_get_urls_team_stats_players(self, team_1):
+    def __soup_get_urls_team_stats_players(self, team_1, match_status):
         """Parsing URL for players statistics (if team_1 = True - from team 1, False - from team 2)."""
         """Парсинг URL на статистику игроков (если team_1 = True - из команды 1, False - из команды 2)."""
         teams_dict = {True: 0, False: 1}
         lineups = self.__soup.find_all('div', class_='lineup standard-box')
         if (not lineups):
-            print("This match has not lineups. Skipping...")
+            self.log_and_print("This match has not lineups.")
             return None
         players_nicknames = lineups[teams_dict[team_1]].find_all('div', class_='text-ellipsis')
         if (len(players_nicknames) < 5):
-            print('In team %d some players still unknown. Skipping...' % (teams_dict[team_1] + 1))
+            self.log_and_print('In team %d some players still unknown.' % (teams_dict[team_1] + 1))
             return None
-        if (self.status == 10002):
+        if (match_status == 10002):
             players_compare = lineups[teams_dict[team_1]].find_all('div', class_='player-compare')
             if (len(players_compare) < 10):
-                print('In team %d some players have not statistic page. Skipping...' % (teams_dict[team_1] + 1))
+                self.log_and_print('In team %d some players have not statistic page.' % (teams_dict[team_1] + 1))
                 return None
             for i in range(int(len(players_compare)/2-1), -1, -1):
                 players_compare.pop(i)
-        elif (self.status == 10001):
+        elif (match_status == 10001):
             tr = lineups[teams_dict[team_1]].find_all('tr')
             if (tr):
                 players = tr[1].find_all('div', class_='flagAlign')
                 if (not players):
-                    print("This match has not players blocks. Skipping...")
+                    self.log_and_print("This match has not players blocks.")
                     return None
             else:
-                print("This match has not tr blocks. Skipping...")
+                self.log_and_print("This match has not tr blocks.")
                 return None
         else:
-            print("Error while getting players stats URLs: status match is incorrect. Skipping...")
+            self.log_and_print("Error while getting players stats URLs: status match is incorrect.")
             return None
         date_today = date.isoformat(date.today())
         date_3_month_ago = date.isoformat(date.today() - timedelta(days=90))
@@ -1174,26 +1465,61 @@ class Match(Program):
         for i in range(5):
             nickname = players_nicknames[i].text
             if (nickname == 'TBA') or (nickname == 'TBD'):
-                print('In team %d some players still unknown. Skipping...' % (teams_dict[team_1] + 1))
+                self.log_and_print('In team %d some players still unknown.' % (teams_dict[team_1] + 1))
                 return None
-            if (self.status == 10002):
+            if (match_status == 10002):
                 id_player = players_compare[i]['data-player-id']
-            elif (self.status == 10001):
+            elif (match_status == 10001):
                 id_player = players[i]['data-player-id']
             else:
-                print("Error while getting players stats URLs: status match is incorrect. Skipping...")
+                self.log_and_print("Error while getting players stats URLs: status match is incorrect.")
                 return None
             if (id_player == '0'):
-                print('In team %d some players has not ID. Skipping...' % (teams_dict[team_1] + 1))
+                self.log_and_print('In team %d some players has not ID.' % (teams_dict[team_1] + 1))
                 return None
             urls_players.append('{}{}/{}/{}{}{}{}{}'.format(self.source_urls[0], self.source_urls[2], id_player, nickname, self.source_urls[4], date_3_month_ago, self.source_urls[5], date_today))
         return tuple(urls_players)
+
+    def __soup_get_nicknames_and_IDs(self, team_1):
+        """Parsing of nicknames."""
+        """Парсинг никнеймов игроков."""
+        teams_dict = {True: 0, False: 1}
+        lineups = self.__soup.find_all('div', class_='lineup standard-box')
+        if (lineups):
+            tr = lineups[teams_dict[team_1]].find_all('tr')
+            if (tr):
+                players = tr[1].find_all('div', class_='flagAlign', attrs={'data-player-id': True})
+                if (players):
+                    if (len(players) == 5):
+                        IDs_and_nicknames = [[], []]
+                        for i in range(5):
+                            if (players[i].text == '\nTBA\n') or (players[i].text == '\nTBD\n'):
+                                self.log_and_print('This match has not player {} in team {}.'.format(str(i + 1), str(teams_dict[team_1] + 1)))
+                                return None
+                            else:
+                                IDs_and_nicknames[0].append(players[i]['data-player-id'])
+                                IDs_and_nicknames[1].append(players[i].find('div', class_='text-ellipsis').text)
+                        IDs_and_nicknames[0] = tuple(IDs_and_nicknames[0])
+                        IDs_and_nicknames[1] = tuple(IDs_and_nicknames[1])
+                        return tuple(IDs_and_nicknames)
+                    else:
+                        self.log_and_print('In this match team {} have less than 5 players.'.format(str(teams_dict[team_1] + 1)))
+                        return None
+                else:
+                    self.log_and_print('This match has not players blocks.')
+                    return None
+            else:
+                self.log_and_print("This match has not tr blocks.")
+                return None
+        else:
+            self.log_and_print("This match has not lineups blocks.")
+            return None
 
 class Team(Program):
     """Object team statistics."""
     """Объект статистики команды."""
 
-    def __init__(self):
+    def __init__(self, competitive_maps):
         self.__soup_1 = None
         self.__soup_2 = None
         self.__url = None
@@ -1203,14 +1529,14 @@ class Team(Program):
         self.__maps_data = (Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats(), Map_stats())
         #                     Cache     Cobblestone     Dust 2      Inferno       Mirage        Nuke       Overpass      Season       Train        Tuscan      Vertigo
         self.status = None
-        self.__active_maps = program.competitive_maps
+        self.__active_maps = competitive_maps
         self.__maps_titles = ('Cache', 'Cobblestone', 'Dust2', 'Inferno', 'Mirage', 'Nuke', 'Overpass', 'Season', 'Train', 'Tuscan', 'Vertigo')
         self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
 
-    def download_data(self, url_1, url_2):
+    def download_data(self, url_1, url_2, team_title):
         """Parsing team data."""
         """Парсинг данных команды."""
-        print('Uploading team data: step 1...')
+        self.log_and_print('Uploading team {} data: step 1...'.format(team_title))
         self.__soup_1 = self.download_html(url_1) # https://www.hltv.org/team/[ID]/[Team name]
         if (type(self.__soup_1) == int):
             self.status = self.__soup_1
@@ -1225,12 +1551,12 @@ class Team(Program):
         if (self.__team):
             self.__team = self.__team.text
         else:
-            print('This team has not name block. Skipping...')
+            self.log_and_print('This team has not name block.')
             return 5136
         self.__rating = self.__soup_get_team_rating()
         if (not self.__rating):
             return 5136
-        print('Uploading team {} data: step 2...'.format(self.__team))
+        self.log_and_print('Uploading team {} data: step 2...'.format(self.__team))
         self.__soup_2 = self.download_html(url_2) # https://www.hltv.org/stats/lineup/maps?lineup=[ID player 1]&lineup=[ID player 2]&lineup=[ID player 3]&lineup=[ID player 4]&lineup=[ID player 5]&minLineupMatch=3&startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(self.__soup_2) == int):
             self.status = self.__soup_2
@@ -1243,11 +1569,11 @@ class Team(Program):
                     return download_map_stat
                 elif (download_map_stat == 5136):
                     return 5136
-            print('Team statistics download complete.')
+            self.log_and_print('Team statistics download complete.')
             self.status = 200
             return 200
         elif (stats_urls == [None, None, None, None, None, None, None, None, None, None, None]):
-            print('Not critical error while getting team stats URLs: tuple have not any URL (team not played any competitive map?). Skipping...')
+            self.log_and_print('Not critical error while getting team stats URLs: tuple have not any URL (team not played any competitive map?).')
             return 5136
         else:
             return 5136
@@ -1265,7 +1591,7 @@ class Team(Program):
         elif (self.status == 5136):
             return None
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
             return None
 
     def __soup_get_team_rating(self):
@@ -1280,7 +1606,7 @@ class Team(Program):
             else:
                 return 'unknown'
         else:
-            print('This team has not rating block. Skipping...')
+            self.log_and_print('This team has not rating block.')
             return None
 
     def __soup_get_stats_urls(self):
@@ -1302,10 +1628,10 @@ class Team(Program):
                         full_maps_urls[i] = maps_urls[url_index]
                 return tuple(full_maps_urls)
             else:
-                print('In this team, the maps statistics have not URLs. Skipping...')
+                self.log_and_print('In this team, the maps statistics have not URLs.')
                 return None
         else:
-            print('In this team, the maps statistics are still unknown. Skipping...')
+            self.log_and_print('In this team, the maps statistics are still unknown.')
             return None
 
 class Map_stats(Program):
@@ -1324,6 +1650,8 @@ class Map_stats(Program):
         self.__pistol_rounds = None
         self.__pistol_rounds_won = None
         self.__pistol_round_win_percent = None
+        self.__CT_round_win_percent = None
+        self.__T_round_win_percent = None
         self.status = None
         self.__table_rows_names = ('Times played', 'Wins / draws / losses', 'Total rounds played', 'Rounds won', 'Win percent', 'Pistol rounds', 'Pistol rounds won', 'Pistol round win percent', 'CT round win percent', 'T round win percent')
 
@@ -1331,7 +1659,7 @@ class Map_stats(Program):
         """Parsing map stat."""
         """Парсинг статистики карты."""
         if (url):
-            print('Uploading team {} data: step 3: map {}...'.format(team_name, map_name))
+            self.log_and_print('Uploading team {} data: step 3: map {}...'.format(team_name, map_name))
             self.__soup = self.download_html(url) # https://www.hltv.org/stats/lineup/map/[ID map]?lineup=[ID player 1]&lineup=[ID player 2]&lineup=[ID player 3]&lineup=[ID player 4]&lineup=[ID player 5]&minLineupMatch=3&startDate=[Date 3 month ago]&endDate=[Date today]
             if (type(self.__soup) == int):
                 self.status = self.__soup
@@ -1349,6 +1677,8 @@ class Map_stats(Program):
                 self.__pistol_rounds = data_team_map[7]
                 self.__pistol_rounds_won = data_team_map[8]
                 self.__pistol_round_win_percent = data_team_map[9]
+                self.__CT_round_win_percent = data_team_map[10]
+                self.__T_round_win_percent = data_team_map[11]
                 self.status = 200
                 return 200
             else:
@@ -1364,6 +1694,8 @@ class Map_stats(Program):
             self.__pistol_rounds = 0
             self.__pistol_rounds_won = 0
             self.__pistol_round_win_percent = 0
+            self.__CT_round_win_percent = 0
+            self.__T_round_win_percent = 0
             self.status = 200
             return 200
 
@@ -1371,10 +1703,10 @@ class Map_stats(Program):
         """Getting map stat data."""
         """Получение данных статистики карты."""
         if (self.status == 200):
-            data = (self.__times_played, self.__wins, self.__draws, self.__losses, self.__total_rounds_played, self.__rounds_won, self.__win_percent, self.__pistol_rounds, self.__pistol_rounds_won, self.__pistol_round_win_percent)
+            data = (self.__times_played, self.__wins, self.__draws, self.__losses, self.__total_rounds_played, self.__rounds_won, self.__win_percent, self.__pistol_rounds, self.__pistol_rounds_won, self.__pistol_round_win_percent, self.__CT_round_win_percent, self.__T_round_win_percent)
             return data
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
             return self.status
 
     def __soup_get_data(self):
@@ -1402,7 +1734,7 @@ class Map_stats(Program):
                         data_team_map.append(stats[i][j])
             return tuple(data_team_map)
         else:
-            print('In this team, the map statistic have not some rows. Skipping...')
+            self.log_and_print('In this team, the map statistic have not some rows.')
             return None
 
 class Player(Program):
@@ -1445,10 +1777,10 @@ class Player(Program):
         self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.__table_rows_names = ('Kills', 'Deaths', 'Kill / Death', 'Kill / Round', 'Rounds with kills', 'Kill - Death differenceK - D diff.', 'Total opening kills', 'Total opening deaths', 'Opening kill ratio', 'Opening kill rating', 'Team win percent after first kill', 'First kill in won rounds', '0 kill rounds', '1 kill rounds', '2 kill rounds', '3 kill rounds', '4 kill rounds', '5 kill rounds', 'Rifle kills', 'Sniper kills', 'SMG kills', 'Pistol kills', 'Grenade', 'Other')
 
-    def download_data(self, url_1):
+    def download_data(self, url_1, nickname):
         """Parsing player data."""
         """Парсинг данных игрока."""
-        print('Uploading player data: step 1...')
+        self.log_and_print('Uploading player {} data: step 1...'.format(nickname))
         self.__soup_1 = self.download_html(url_1) # https://www.hltv.org/stats/players/[ID]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(self.__soup_1) == int):
             self.status = self.__soup_1
@@ -1462,7 +1794,7 @@ class Player(Program):
         if (self.__nickname):
             self.__nickname = self.__nickname.text
         else:
-            print('This player has not some nickname. Skipping...')
+            self.log_and_print('This player has not some nickname.')
             return 5136
         self.__current_team = self.__soup_get_current_team()
         if (not self.__current_team):
@@ -1476,7 +1808,7 @@ class Player(Program):
             return 5136
         else:
             url_2 = self.source_urls[0] + url_2['href']
-        print('Uploading player {} data: step 2...'.format(self.__nickname))
+        self.log_and_print('Uploading player {} data: step 2...'.format(self.__nickname))
         self.__soup_2 = self.download_html(url_2) # https://www.hltv.org/stats/players/individual/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(self.__soup_2) == int):
             self.status = self.__soup_2
@@ -1519,10 +1851,10 @@ class Player(Program):
             data = (self.__ID, self.__nickname, self.__current_team, self.__kills, self.__deaths, self.__kill_per_death, self.__kill_per_round, self.__rounds_with_kills, self.__kill_death_difference, self.__total_opening_kills, self.__total_opening_deaths, self.__opening_kill_ratio, self.__opening_kill_rating, self.__team_win_percent_after_first_kill, self.__first_kill_in_won_rounds, self.__0_kill_rounds, self.__1_kill_rounds, self.__2_kill_rounds, self.__3_kill_rounds, self.__4_kill_rounds, self.__5_kill_rounds, self.__rifle_kills, self.__sniper_kills, self.__smg_kills, self.__pistol_kills, self.__grenade, self.__other, self.__rating_2_0, self.__url)
             return data
         else:
-            print('Data is corrupted.')
+            self.log_and_print('Data is corrupted.')
 
     def download_current_team(self, url, nickname):
-        print('Uploading current team of player {}...'.format(nickname))
+        self.log_and_print('Uploading current team of player {}...'.format(nickname))
         self.__soup_1 = self.download_html(url) # https://www.hltv.org/stats/players/[ID]/[Nickname]
         if (type(self.__soup_1) == int):
             self.status = self.__soup_1
@@ -1541,19 +1873,19 @@ class Player(Program):
             if (team_current):
                 return team_current.text
             else:
-                print('Error: cannot get current team. Skipping...')
+                self.log_and_print('Error: cannot get current team.')
                 return None
 
     def __soup_get_url(self, dirt_url):
         """Parsing URL of player."""
         """Парсинг URL игрока."""
         if (dirt_url.count('?') == 0):
-            print('Error: the URL does not contain the period of statistics collection. Skipping...')
+            self.log_and_print('Error: the URL does not contain the period of statistics collection.')
             return None
         elif (dirt_url.count('?') == 1):
             return dirt_url[0:dirt_url.find('?')]
         else:
-            print('Warning: probably URL is corrupted.')
+            self.log_and_print('Warning: probably URL is corrupted.')
             return dirt_url[0:dirt_url.find('?')]
 
     def __soup_get_player_rating(self):
@@ -1567,7 +1899,7 @@ class Player(Program):
             elif (rating.count('.') == 0):
                 return int(rating)
             else:
-                print('Error: the rating 2.0 is not a number. Skipping...')
+                self.log_and_print('Error: the rating 2.0 is not a number.')
                 return None
 
     def __soup_get_rows_data(self):
@@ -1587,51 +1919,69 @@ class Player(Program):
                     rows[i] = int(rows[i])
             return rows
         else:
-            print('Error: the stats table not exist. Skipping...')
+            self.log_and_print('Error: the stats table not exist.')
             return None
 
 """Main executable code"""
 """Основной исполняемый код"""
-user_agent = UserAgent().chrome
+# This code will relocate to new class
+runned = False
 program = Program()
 deny_start = False
-print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.4.8 alpha.')
 import_cfg = program.import_settings()
 if (import_cfg):
-    print('Config imported successfully.')
+    program.log_and_print('Config imported successfully.')
 else:
-    print('Parser terminated with error.')
-DB_ready = program.DB.check()
-if (not DB_ready):
-    print("Got error while checking or updating database.")
-    repair_DB = program.question(program.questions[4], True)
-    if (repair_DB):
-        program.recreate_DB()
-    else:
-        deny_start = True
-backup_db = program.backup_DB()
-if (backup_db):
-    if (deny_start):
-        start = False
-    else:
-        start = program.question(program.questions[0], True)
-else:
-    start = False
-if (start):
-    auto_mode = program.question(program.questions[1], False)
-    success_updating = program.parcing_update()
-    if (success_updating):
-        if (auto_mode):
-            success_ending = program.parcing_auto()
+    program.log_and_print('Parser terminated with error.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.0 alpha.')
+while (program.repeat_mode + 1 > 0):
+    DB_ready = program.DB.check()
+    if (not DB_ready):
+        program.log_and_print("Got error while checking or updating database.")
+        repair_DB = program.question(program.questions[3], True)
+        if (repair_DB):
+            program.recreate_DB()
         else:
-            success_ending = program.parcing_manually()
-        if (success_ending):
-            success_ending = program.update_current_team_of_players()
+            deny_start = True
+    elif (DB_ready == 'Update cancelled.'):
+        print(DB_ready)
+        break
+    backup_db = program.backup_DB()
+    if (backup_db):
+        if (deny_start):
+            start = False
+        else:
+            if (not runned):
+                start = program.question(program.questions[0], True)
+            else:
+                start = True
     else:
-        success_ending = False
-else:
-    success_ending = True
-if (success_ending):
-    print('Bye.')
-else:
-    print('Parser terminated with error.')
+        start = False
+    if (start):
+        runned = True
+        auto_mode = program.auto_mode
+        success_updating = program.parcing_update()
+        if (success_updating):
+            if (auto_mode):
+                success_ending = program.parcing_auto()
+            else:
+                success_ending = program.parcing_manually()
+            if (success_ending):
+                success_ending = program.update_current_team_of_players()
+        else:
+            success_ending = False
+    else:
+        success_ending = True
+    if (success_ending):
+        program.log_and_print('Bye.')
+    else:
+        program.log_and_print('Parser terminated with error.')
+    program.clear_temp_data()
+    if (program.repeat_mode != 0):
+        program.log_and_print('Parser has switched to sleep mode. Awakening in {}'.format(datetime.now().isoformat(' ')))
+        time.sleep(86400 * program.repeat_mode)
+        user_agent = UserAgent().chrome
+        program.log_and_print('-------------------------------------------------------------------------------------------------------------------------------\n')
+        program.log_and_print('Start datetime: {}\n'.format(datetime.now().isoformat(' ')))
+    else:
+        program.repeat_mode -= 1
