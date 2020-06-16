@@ -561,7 +561,7 @@ class Program():
         if (type(input_string) == str):
             print(input_string)
             log_file = open('parcer.log', 'a', encoding='utf-8')
-            log_file.write(input_string + '\n')
+            log_file.write('{}\t\t{}\n'.format(datetime.now().isoformat(' '), input_string))
             log_file.close()
         else:
             print('Log and print error: input value must be str, getted {}.'.format(type(input_string)))
@@ -1930,7 +1930,7 @@ if (import_cfg):
     program.log_and_print('Config imported successfully.')
 else:
     program.log_and_print('Parser terminated with error.')
-program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.0 alpha.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.2 alpha.')
 while (program.repeat_mode + 1 > 0):
     DB_ready = program.DB.check()
     if (not DB_ready):
