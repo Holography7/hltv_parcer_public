@@ -10,6 +10,7 @@ from datetime import date
 from datetime import timedelta
 import random
 import socket
+import ssl
 
 class Program():
     """Main class"""
@@ -63,12 +64,8 @@ class Program():
                 self.log_and_print('Error: timed out. Stopping parcing this page...')
                 self.log_and_print(str(e))
                 status = 408
-            except exceptions.ReadTimeoutError as e:
-                self.log_and_print('Error: timed out. Stopping parcing this page...')
-                self.log_and_print(str(e))
-                status = 408
             except Exception as e:
-                self.log_and_print("Unknown error while downloading HTML: {}. Stopping parcing this page...".format(str(e)))
+                self.log_and_print("Unknown error while downloading HTML: {}.".format(str(e)))
                 status = e
             if (i != count_retries - 1):
                 self.log_and_print("Attempt to re-download HTML (retries {} remain).".format(count_retries - i - 1))
