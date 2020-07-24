@@ -378,27 +378,28 @@ class Program():
     def __soup_get_info_matches(self): # relocate to new class
         """Parsing URLs to upcoming matches."""
         """Парсинг URL на предстоящие матчи."""
-        block_upcomig_matches = self.__soup.find(class_='upcoming-matches')
+        block_upcomig_matches = self.__soup.find(class_='upcomingMatchesWrapper')
         if (not block_upcomig_matches):
-            self.log_and_print('Error while searching block "upcoming-matches". Parcer will stopped...')
+            self.log_and_print('Error while searching block "upcomingMatchesWrapper". Parcer will stopped...')
             return False
-        all_upcoming_matches = block_upcomig_matches.find_all('a', class_='a-reset')
+        all_upcoming_matches = block_upcomig_matches.find_all('a', class_='match a-reset')
         if (not all_upcoming_matches):
             self.log_and_print('Error while searching URLs on upcoming matches (there are not upcoming matches?). Parcer will stopped...')
             return False
-        all_dates = block_upcomig_matches.find_all('div', class_='upcoming-match standard-box')
+        all_dates = block_upcomig_matches.find_all('div', class_='matchTime')
         for i in range(len(all_upcoming_matches)):
-            teams = all_upcoming_matches[i].find_all('td', class_='team-cell')
+            teams = all_upcoming_matches[i].find('div', class_='matchTeams text-ellipsis')
             if (teams):
-                if (teams[0].find('img')) and (teams[1].find('img')):
+                if (len(teams.find_all('div', class_='matchTeamLogoContainer')) == 2):
                     self.__urls_matches_soup.append(self.source_urls[0] + all_upcoming_matches[i]['href'])
-                    self.__titles_matches_soup.append(teams[0].find('div', class_='team').text + ' vs ' + teams[1].find('div', class_='team').text)
-                    self.__match_tournaments_soup.append(all_upcoming_matches[i].find('span', class_='event-name').text)
+                    teams_titles = teams.find_all('div', class_='matchTeamName text-ellipsis')
+                    self.__titles_matches_soup.append(teams_titles[0].text + ' vs ' + teams_titles[1].text)
+                    self.__match_tournaments_soup.append(all_upcoming_matches[i].find('div', class_='matchEventName').text)
+                    self.__match_dates_soup.append(datetime.fromtimestamp(float(all_dates[i]['data-unix'])/1000).isoformat(' ') + '.000')
                 else:
                     continue
             else:
                 continue
-            self.__match_dates_soup.append(datetime.fromtimestamp(float(all_dates[i]['data-zonedgrouping-entry-unix'])/1000).isoformat(' ') + '.000')
         return True
 
     def __soup_prepare_urls(self, urls_matches_DB): # relocate to new class (and rename to __soup_clear_urls_exist_matches or something like that)
@@ -1930,7 +1931,7 @@ if (import_cfg):
     program.log_and_print('Config imported successfully.')
 else:
     program.log_and_print('Parser terminated with error.')
-program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.2 alpha.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.3 alpha.')
 while (program.repeat_mode + 1 > 0):
     DB_ready = program.DB.check()
     if (not DB_ready):
