@@ -15,18 +15,16 @@ import ssl
 class Program():
     """Main class"""
     """Основной класс"""
+    user_agent = UserAgent().chrome
+    count_retries = 3
+    source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
+    questions = ('Start parcer? (Y/n): ',
+    'Want to start? (Y/n): ',
+    'Want to continue? (Y/n): ',
+    'Want to recreate the database (if yes, the old database will saved as hltv_compact_old.db)? (Y/n): ',
+    'Got error while downloading match. Do you want continue? (Y/n): ')
 
     def __init__(self):
-        global user_agent
-        global count_retries
-        user_agent = UserAgent().chrome
-        count_retries = 3
-        self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
-        self.questions = ('Start parcer? (Y/n): ',
-        'Want to start? (Y/n): ',
-        'Want to continue? (Y/n): ',
-        'Want to recreate the database (if yes, the old database will saved as hltv_compact_old.db)? (Y/n): ',
-        'Got error while downloading match. Do you want continue? (Y/n): ')
         self.DB = None
         self.DB_filename = None
         self.auto_mode = None
@@ -46,15 +44,17 @@ class Program():
         self.__nicknames = [] # relocate to new class
 
     def download_html(self, url):
-        for i in range(count_retries):
+        for i in range(Program.count_retries):
             status = 0
             try:
                 time.sleep(random.uniform(1, 2))
-                req = requests.get(url, headers={'User-Agent': user_agent}, timeout=5)
+                req = requests.get(url, headers={'User-Agent': Program.user_agent}, timeout=5)
                 if (req.status_code == 200):
                     return BeautifulSoup(req.text, 'html.parser')
                 else:
                     self.log_and_print('Error {} while uploading {} (HTML-error).'.format(str(req.status_code), url))
+                    if req.status_code == 503:
+                        Program.user_agent = UserAgent().chrome
                     status = req.status_code
             except requests.Timeout as e:
                 self.log_and_print('Error: timed out. Stopping parcing this page...')
@@ -67,40 +67,38 @@ class Program():
             except Exception as e:
                 self.log_and_print("Unknown error while downloading HTML: {}.".format(str(e)))
                 status = e
-            if (i != count_retries - 1):
-                self.log_and_print("Attempt to re-download HTML (retries {} remain).".format(count_retries - i - 1))
+            if (i != Program.count_retries - 1):
+                self.log_and_print("Attempt to re-download HTML (retries {} remain).".format(Program.count_retries - i - 1))
         return status
 
     def get_id_from_url(self, url):
         """Getting an ID from a URL."""
         """Получение ID из URL."""
-        ID = 'None'
-        for i in range(1, 4):
-            if (url.count(self.source_urls[0] + self.source_urls[i])):
-                ID = url.replace(self.source_urls[0] + self.source_urls[i] + '/', '')
-                last_slash = ID.find('/')
-                if (last_slash != -1):
-                    ID = ID[0:ID.find('/')]
-                else:
-                    ID = '/'
-                break
-        if (ID.isdigit() == True):
-            return ID
+        if Program.source_urls[0] in url:
+            parts = url.replace(Program.source_urls[0] + '/', '').split('/')
+        elif url[0] == '/':
+            parts = url[1:].split('/')
         else:
-            self.log_and_print('Error 1470: ID not founded in URL {}.'.format(url))
-            return '0'
+            parts = url.split('/')
+        for i in parts:
+            if i.isdigit():
+                return int(i)
+        self.log_and_print('Error: ID not founded in URL {}.'.format(url))
+        return None
 
-    def question(self, question_message, default_answer):
+    def question(self, question_message, default_answer=True):
         """Method for asking questions to the user."""
         """Метод для задавания вопросов пользователю."""
         while(True):
-            answer = str(input(question_message))
-            if answer == 'Y' or answer == 'y' or (answer == '' and default_answer):
+            answer = input(question_message).lower()
+            if answer == 'y':
                 return True
-            elif answer == 'N' or answer == 'n' or (answer == '' and not default_answer):
+            elif answer == 'n':
                 return False
+            elif answer == '':
+                return default_answer
             else:
-                self.log_and_print('Try again.')
+                self.log_and_print('Wrong answer. Try again.')
 
     def parcing_auto(self): # relocate to new class
         """Method for automatic parsing mode"""
@@ -135,7 +133,7 @@ class Program():
                 self.log_and_print('Skipping...')
                 continue
             else:
-                ignore_error = self.question(self.questions[4], True)
+                ignore_error = self.question(Program.questions[4], True)
                 if (ignore_error):
                     continue
                 else:
@@ -146,7 +144,7 @@ class Program():
     def parcing_manually(self): # merge with parcing_auto
         """Method for manual parsing mode"""
         """Метод для ручного режима парсинга"""
-        stop = self.question(self.questions[1], True)
+        stop = self.question(Program.questions[1], True)
         i = 0
         while (stop):
             match = Match()
@@ -174,7 +172,7 @@ class Program():
                 elif (update_stat == 5136):
                     i += 1
                     if (i < len(self.__urls_matches_soup)):
-                        stop = self.question(self.questions[2], True)
+                        stop = self.question(Program.questions[2], True)
                     else:
                         stop = False
                     continue
@@ -182,12 +180,12 @@ class Program():
                 self.log_and_print('Skipping...')
                 i += 1
                 if (i < len(self.__urls_matches_soup)):
-                    stop = self.question(self.questions[2], True)
+                    stop = self.question(Program.questions[2], True)
                 else:
                     stop = False
                 continue
             else:
-                ignore_error = self.question(self.questions[4], True)
+                ignore_error = self.question(Program.questions[4], True)
                 if (ignore_error):
                     continue
                 else:
@@ -195,7 +193,7 @@ class Program():
                     return False
             i += 1
             if (i < len(self.__urls_matches_soup)):
-                stop = self.question(self.questions[2], True)
+                stop = self.question(Program.questions[2], True)
             else:
                 stop = False
         return True
@@ -239,7 +237,7 @@ class Program():
                     self.log_and_print('Deleting...')
                     self.DB.delete_data('matches_upcoming', id_match)
                 else:
-                    ignore_error = self.question(self.questions[4], True)
+                    ignore_error = self.question(Program.questions[4], True)
                     if (ignore_error):
                         continue
                     else:
@@ -355,12 +353,11 @@ class Program():
                         return False
                     self.__use_log()
                 elif (i == 15):
-                    global count_retries
                     if (field_value.isdigit()):
                         if (int(field_value) <= 20):
-                            count_retries = int(field_value)
+                            Program.count_retries = int(field_value)
                         else:
-                            count_retries = 20
+                            Program.count_retries = 20
                             print('Not critical error while reading settings.cfg: download_count_retries more than 20. Count set to 20.')
                     else:
                         print('Error while reading settings.cfg: download_count_retries value not a integer.')
@@ -391,7 +388,7 @@ class Program():
             teams = all_upcoming_matches[i].find('div', class_='matchTeams text-ellipsis')
             if (teams):
                 if (len(teams.find_all('div', class_='matchTeamLogoContainer')) == 2):
-                    self.__urls_matches_soup.append(self.source_urls[0] + all_upcoming_matches[i]['href'])
+                    self.__urls_matches_soup.append(Program.source_urls[0] + all_upcoming_matches[i]['href'])
                     teams_titles = teams.find_all('div', class_='matchTeamName text-ellipsis')
                     self.__titles_matches_soup.append(teams_titles[0].text + ' vs ' + teams_titles[1].text)
                     self.__match_tournaments_soup.append(all_upcoming_matches[i].find('div', class_='matchEventName').text)
@@ -601,7 +598,6 @@ class Program():
 class Database(Program):
 
     def __init__(self, db_name):
-        self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.__conn = sqlite3.connect(db_name)
         self.__cursor = self.__conn.cursor()
         self.__tables_tuple = ('matches_upcoming', 'matches_completed', 'players', 'teams', 'DB_version')
@@ -1132,7 +1128,6 @@ class Match(Program):
         self.__nicknames = [[], []]
         self.__IDs_players = [[], []]
         self.__score_types = ('won', 'tie', 'lost')
-        self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.lineup_url = ('/stats/lineup/maps?', 'minLineupMatch=3', '&startDate=')
 
     def download_data(self, url, match_title, match_date, match_tournament):
@@ -1299,7 +1294,7 @@ class Match(Program):
         if (team):
             if (url_bool):
                 if (team.find('a')):
-                    return self.source_urls[0] + team.find('a')['href']
+                    return Program.source_urls[0] + team.find('a')['href']
                 else:
                     self.log_and_print('In this match, team {} URL are still unknown.'.format(teams_dict[team_1]))
                     return None
@@ -1411,7 +1406,7 @@ class Match(Program):
             if (teams_stats):
                 urls_teams_stats = teams_stats.find_all(class_='team')
                 if (urls_teams_stats):
-                    return self.source_urls[0] + urls_teams_stats[teams_dict[team_1]].find('a')['href']
+                    return Program.source_urls[0] + urls_teams_stats[teams_dict[team_1]].find('a')['href']
                 else:
                     self.log_and_print('This match has not URL for team %d stat.' % (teams_dict[team_1] + 1))
                     return None
@@ -1419,7 +1414,7 @@ class Match(Program):
                 self.log_and_print('This match has not URLs for teams stats.')
                 return None
         elif (match_status == 10001):
-            url = '{}{}lineup={}&lineup={}&lineup={}&lineup={}&lineup={}&{}{}{}{}{}'.format(self.source_urls[0], self.lineup_url[0], *self.__IDs_players[teams_dict[team_1]], self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), self.source_urls[5], date.isoformat(date.today()))
+            url = '{}{}lineup={}&lineup={}&lineup={}&lineup={}&lineup={}&{}{}{}{}{}'.format(Program.source_urls[0], self.lineup_url[0], *self.__IDs_players[teams_dict[team_1]], self.lineup_url[1], self.lineup_url[2], date.isoformat(date.today() - timedelta(days=90)), Program.source_urls[5], date.isoformat(date.today()))
             return url
         else:
             self.log_and_print("Error while getting team stat URL: status match is incorrect.")
@@ -1475,7 +1470,7 @@ class Match(Program):
             if (id_player == '0'):
                 self.log_and_print('In team %d some players has not ID.' % (teams_dict[team_1] + 1))
                 return None
-            urls_players.append('{}{}/{}/{}{}{}{}{}'.format(self.source_urls[0], self.source_urls[2], id_player, nickname, self.source_urls[4], date_3_month_ago, self.source_urls[5], date_today))
+            urls_players.append('{}{}/{}/{}{}{}{}{}'.format(Program.source_urls[0], Program.source_urls[2], id_player, nickname, Program.source_urls[4], date_3_month_ago, Program.source_urls[5], date_today))
         return tuple(urls_players)
 
     def __soup_get_nicknames_and_IDs(self, team_1):
@@ -1529,7 +1524,6 @@ class Team(Program):
         self.status = None
         self.__active_maps = competitive_maps
         self.__maps_titles = ('Cache', 'Cobblestone', 'Dust2', 'Inferno', 'Mirage', 'Nuke', 'Overpass', 'Season', 'Train', 'Tuscan', 'Vertigo')
-        self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
 
     def download_data(self, url_1, url_2, team_title):
         """Parsing team data."""
@@ -1617,7 +1611,7 @@ class Team(Program):
             soup_maps_titles = block_maps.find_all('a')
             if (maps_urls):
                 for i in range(len(maps_urls)):
-                    maps_urls[i] = self.source_urls[0] + maps_urls[i]['href']
+                    maps_urls[i] = Program.source_urls[0] + maps_urls[i]['href']
                     soup_maps_titles[i] = soup_maps_titles[i].text
                 full_maps_urls = [None, None, None, None, None, None, None, None, None, None, None]
                 for i in range(len(self.__active_maps)):
@@ -1772,7 +1766,6 @@ class Player(Program):
         self.__rating_2_0 = None
         self.__url = None
         self.status = None
-        self.source_urls = ('https://www.hltv.org', '/matches', '/stats/players', '/team', '?startDate=', '&endDate=')
         self.__table_rows_names = ('Kills', 'Deaths', 'Kill / Death', 'Kill / Round', 'Rounds with kills', 'Kill - Death differenceK - D diff.', 'Total opening kills', 'Total opening deaths', 'Opening kill ratio', 'Opening kill rating', 'Team win percent after first kill', 'First kill in won rounds', '0 kill rounds', '1 kill rounds', '2 kill rounds', '3 kill rounds', '4 kill rounds', '5 kill rounds', 'Rifle kills', 'Sniper kills', 'SMG kills', 'Pistol kills', 'Grenade', 'Other')
 
     def download_data(self, url_1, nickname):
@@ -1805,7 +1798,7 @@ class Player(Program):
         if (not url_2):
             return 5136
         else:
-            url_2 = self.source_urls[0] + url_2['href']
+            url_2 = Program.source_urls[0] + url_2['href']
         self.log_and_print('Uploading player {} data: step 2...'.format(self.__nickname))
         self.__soup_2 = self.download_html(url_2) # https://www.hltv.org/stats/players/individual/[Number player]/[Nickname]?startDate=[Date 3 month ago]&endDate=[Date today]
         if (type(self.__soup_2) == int):
@@ -1931,12 +1924,12 @@ if (import_cfg):
     program.log_and_print('Config imported successfully.')
 else:
     program.log_and_print('Parser terminated with error.')
-program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.3 alpha.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.4 alpha.')
 while (program.repeat_mode + 1 > 0):
     DB_ready = program.DB.check()
     if (not DB_ready):
         program.log_and_print("Got error while checking or updating database.")
-        repair_DB = program.question(program.questions[3], True)
+        repair_DB = program.question(Program.questions[3], True)
         if (repair_DB):
             program.recreate_DB()
         else:
@@ -1950,7 +1943,7 @@ while (program.repeat_mode + 1 > 0):
             start = False
         else:
             if (not runned):
-                start = program.question(program.questions[0], True)
+                start = program.question(Program.questions[0], True)
             else:
                 start = True
     else:
@@ -1978,7 +1971,7 @@ while (program.repeat_mode + 1 > 0):
     if (program.repeat_mode != 0):
         program.log_and_print('Parser has switched to sleep mode. Awakening in {}'.format(datetime.now().isoformat(' ')))
         time.sleep(86400 * program.repeat_mode)
-        user_agent = UserAgent().chrome
+        Program.user_agent = UserAgent().chrome
         program.log_and_print('-------------------------------------------------------------------------------------------------------------------------------\n')
         program.log_and_print('Start datetime: {}\n'.format(datetime.now().isoformat(' ')))
     else:
