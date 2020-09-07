@@ -1016,7 +1016,7 @@ class Database(Program):
         try:
             for i in range(len(self.__create_tables_commands)):
                 self.__cursor.execute(self.__create_tables_commands[i])
-            self.__cursor.execute("INSERT INTO DB_version VALUES(3);")
+            self.__cursor.execute("INSERT INTO DB_version VALUES(4);")
             self.__conn.commit()
             return True
         except sqlite3.Error as e:
@@ -1924,7 +1924,7 @@ if (import_cfg):
     program.log_and_print('Config imported successfully.')
 else:
     program.log_and_print('Parser terminated with error.')
-program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.4 alpha.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.5 alpha.')
 while (program.repeat_mode + 1 > 0):
     DB_ready = program.DB.check()
     if (not DB_ready):
