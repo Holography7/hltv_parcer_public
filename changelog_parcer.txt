@@ -1,0 +1,439 @@
+Changelog hltv_parcer:
+
+English:
+
+0.5.6 alpha:
+- Fixed a critical bug when loading player statistics, the parser ran into the value "NaN" and crashed when trying to convert it to a number.
+
+0.5.5 alpha:
+- Fixed a critical bug where when creating a new database, the version value took the previous value, which is why the parser thought that it should
+update the database, then it crashed.
+
+0.5.4 alpha:
+- Small refactoring of the source code.
+
+0.5.3 alpha:
+- Update the parser due to changes on HLTV.
+
+0.5.2 alpha:
+- Now the log writes the date and time of the message.
+
+0.5.1 alpha:
+- Another attempt to fix a bug that caused the parser to crash when executing the infinite loading bugfix.
+
+0.5.0 alpha:
+- The parser now loads the name of the tournament of the match. This may take a long time to update the database
+time.
+- The parser now loads new team statistics (CT and T round win percent).
+- Added a log file. If log_add_mode is disabled, the log is overwritten every time the parser is started. If you need to save the previous log,
+you must enable log_add_mode in the config file. Enabling this setting is not recommended, as the log file can be huge.
+- Added repeat_mode. It allows you to automatically run the parser exactly one day after completion. This mode can be enabled in
+config file. This mode is experimental and may cause unexpected errors, so I don't recommend using it.
+- The parser now writes information about the match, the team name and the player's nickname in the first steps of loading.
+- Now the parser does not add matches where teams are still unknown to the download queue.
+- Now the parser tries to reload the HTML if the download failed. The number of attempts can be specified in the config file in the parameter
+download_count_retries (max 20). This change is part of a bug fix where the infinite loading bugfix caused the parser to crash.
+- Cosmetic improvement of the config file
+
+
+
+
+0.4.8 alpha:
+- Fixed a bug with infinite loading.
+
+0.4.7 alpha:
+- The parser can no longer work with HLTV as a robot. Now it is forced to pretend to be a Chrome browser.
+
+0.4.6 alpha:
+- Slight improvement in the search algorithm for players on the match page.
+
+0.4.5 alpha:
+- Fixed a minor bug with the list of URLs for player statistics that needed to be updated.
+- Fixed a bug when the parser crashed when meeting with TBD.
+
+0.4.4 alpha:
+Updating the parser due to changes on HLTV (CT and T round win percent values were added to the team statistics, and these columns will be added to the parser
+in version 0.5.0 alpha).
+
+0.4.3 alpha:
+- Fixed a bug where the parser mistook TBA for a player.
+
+0.4.2 alpha:
+- Fixed a bug where the parser didn't stop downloading statistics if the last map was loaded incorrectly.
+
+0.4.1 alpha:
+- The order of updating matches now corresponds to their date.
+- Fixed a critical bug when the parser did not check the number of players participating in the match.
+
+0.4.0 alpha:
+- Large refactoring of the source code: large methods are divided into small ones, and a new Program class has been added, where global methods are placed
+both variables and all other classes are inheritors of the Program class.
+- The table with team statistics has new columns that add statistics on maps that are on HLTV, but are not active
+map pool. This is done to prepare for future changes to the active map pool.
+- Added a configuration file. You can use this file to set the database name and select the maps that are in the active map pool.
+Statistics on these maps will be loaded when the parser starts.
+- The database is now automatically backed up after verification.
+- When a player moves from one team to another, information about the former player was not updated in the database, which is why this player was considered as still
+present in the team. Now the parser checks whether each player belongs to the team if it finds more than 5 people in the team. This one
+the upload stage occurs after all upcoming matches are uploaded.
+- In some cases, the parser may skip downloading the match if something went wrong during loading.
+- Previously, to update the statistics of teams and players after matches played, the parser updated existing matches with these teams. Now
+the parser updates the statistics of players and matches directly between the update stage and the loading of new matches, without additional updates of matches.
+
+
+
+
+0.3.2, 0.3.3 alpha:
+- Parser updates due to changes on HLTV.
+
+0.3.1 alpha:
+- Fixed a critical bug when the parser crashed when trying to find out record in the database.
+
+0.3.0 alpha:
+- Record IDs were uploaded from HLTV (you could see these IDs in the URL)
+- Added database version control.
+- Now the parser will ask the user to create a new database if the current database did not pass verification. The old database is not deleted, but saved with
+ending _old.
+- The parser now checks not only the presence of tables, but also the columns contained in them and their order.
+- In some cases, the URL for the match was changed on the HLTV side. Now the parser consider this and changes the URL if a change is noticed.
+
+
+
+0.2.10fx alpha:
+- Fixed a bug when the parser crashed when trying to get an ID
+
+0.2.10 alpha:
+- Fixed a bug when the parser crashed when trying to load HTML failed
+- Small refactoring of the source code
+
+0.2.9 alpha:
+- Update of the algorithm for collecting links to players in connection with the HLTV update
+
+0.2.8 alpha:
+- Adding missing comments to the source code
+- Small refactoring of the source code
+
+0.2.7 alpha:
+- Added checking the database after its creation
+
+0.2.6 alpha:
+- Fixed a bug where a completed match was added to the queue of updated matches.
+
+0.2.1 - 0.2.5 alpha:
+- Various fixes and updates due to changes on HLTV
+
+0.2.0 alpha:
+* Code rewritten in OOP style:
+
+- Added classes:
+1. Database - DB class:
+2. Map_stats - team statistics class on the map
+3. Match - match class with information about it
+4. Team - team class with information about it and statistics
+5. Player - player class with information about it and statistics
+- DB verification is implemented in the create method
+- Uploaded data is saved in object fields.
+- Every object (except Database) has get methods that return loaded data.
+
+* Changes in the parser algorithm:
+- The parser now does not reset the database connection until the Database object is deleted.
+- If the database does not pass verification, the parser automatically deletes the corrupted database and creates a new one.
+- In the previous version, a confirmation was required before each match download. You can now disable this feature if you refuse to run it
+in debug mode.
+- If the updated match is completed, the list of uploaded upcoming matches includes matches with the teams that played. This is necessary to
+update statistics of the teams that played.
+- If the updated match is canceled, it is deleted from the database.
+- If the updated match is postponed, its update is skipped.
+- Now the parser loads statistics not for all the time, but for the last 3 months.
+
+
+
+Legacy (private repository):
+* Parser algorithm:
+1. The connection and checking the database. If the database does not exist, it is created again.
+2. If in a DB there are records about the upcoming matches, to update the data (loading data on the matches)
+3. Loading the list of upcoming matches and clearing it from existing ones in the database
+4. Loading data about matches, participating teams and players (cycle for each match):
+- Download match information, URL to information and statistics of teams and players
+- Download team information and statistics for the last 3 months
+- Download player information and statistics for the last 3 months
+- Repeat the last 2 steps for the second team
+- Recording the received data in the database
+The loop may be interrupted if:
+- At least 1 team participating in the match is unknown
+- At least 1 player participating in the match is unknown
+- Missing or incomplete statistics for at least 1 team (there must be statistics for at least 1 of the active pool maps)
+- Missing or incomplete statistics for at least 1 player
+
+* Database structure:
+1. players:
+
+1.1 ID - number of the player
+1.2 Player - player's nickname
+1.3 Current_team - name of the team that the player is a member of
+1.4 - 1.27 - player statistics (example: https://www.hltv.org/stats/players/individual/484/Zeus )
+1.28 Rating_2_0 - player rating
+1.29 Link - the URL of the player
+
+2. teams:
+
+2.1 ID - number of the team
+2.2 Team - the team name
+2.3 Rating - the rating of the team
+2.4 - 2.73 - team statistics on each map (example: https://www.hltv.org/stats/teams/map/32/4608/Natus%20Vincere for each map)
+2.74 Link - team URL
+
+3. matches_upcoming:
+
+3.1 ID - match number
+3.2 Team_1 - name of team 1
+3.3 Team_2 - name of team 2
+3.4 Date_match - match date in the format yyyy-mm-dd hh:mm:ss.msmsms
+3.5 Format_match - how many maps are played in a match (bo1, bo2, bo3, bo5, bo7)
+3.6 Maps - list of maps where the match will be played
+3.7 Link - the URL of the match
+
+4. matches_completed:
+
+3.1 ID - match number
+3.2 Team_1 - name of team 1
+3.3 Team_2 - name of team 2
+3.4 Date_match - match date in the format yyyy-mm-dd hh:mm:ss.msmsms
+3.5 Format_match - how many maps are played in a match (bo1, bo2, bo3, bo5, bo7)
+3.6 Maps - list of maps where the match will be played
+3.7 Result_full - the result of a match on each map
+3.8 Result_maps - total result of the match based on the maps won
+3.9 Link - the URL of the match
+
+* Features:
+- The parser is written in a procedural style.
+- There is a 1 second delay before loading any HTML.
+- The parser asks for upload confirmation before each match.
+- The database does not record data about matches where teams, players or their statistics are unknown.
+- If a match is completed, it is written to matches_completed and removed from matches_upcoming.
+- Data is updated by deleting the old record and inserting new ones, not via UPDATE.
+- The parser initiates a connection to the database every time when data is written or deleted, and then closes the connection.
+- In the teams table, team statistics are recorded on 7 maps from the active map pool. If the active pool changes, the parser will write to columns
+statistics on this map are zero. You need to update the parser if the active map pool changes!
+- The parser does not fully update the teams and players tables. It will only update the teams and players who will be playing the match.
+- The parser does not consider stand-ins. If a player initially plays for another team, but in a match plays for another team as a stand-in, its value is
+Current_team will not be changed.
+- It happens that a player moves to another team, but on the HLTV side information about him is not updated. The parser does not take consider such cases.
+
+Русский:
+
+0.5.6 alpha:
+- Исправлен критический баг, когда при загрузке статистики игрока парсер натыкался на значение "NaN" и падал при попытке преобразовать его в число.
+
+0.5.5 alpha:
+- Исправлен критический баг, когда при создании новой БД значение версии принимало предыдущее значение, из-за чего парсер думал, что нужно 
+обновить БД, после чего падал.
+
+0.5.4 alpha:
+- Небольшой рефакторинг исходного кода.
+
+0.5.3 alpha:
+- Обновление парсера в связи с изменениями на HLTV.
+
+0.5.2 alpha:
+- Теперь лог пишет дату и время сообщения.
+
+0.5.1 alpha:
+- Ещё одна попытка исправить баг, который вызывал падение парсера при исполнении багфикса бесконечной загрузки.
+
+0.5.0 alpha:
+- Парсер теперь загружает название турнира, в рамках которого проводится или проводился матч. Обновление БД из-за этого может занять много 
+времени.
+- Парсер теперь загружает новую статистику команд (CT и T round win percent).
+- Добавлен лог файл. При выключенном log_add_mode лог перезаписывается при каждом запуске парсера. Если нужно сохранить предыдущий лог, 
+необходимо включить log_add_mode в конфиг файле. Включение этой настройки не рекомендуется, так как мфайл лога может быть огромным.
+- Добавлен режим repeat_mode. Он позволяет автоматически запускать парсер ровно через сутки после завершения. Этот режим можно включить в 
+конфиг файле. Режим экспериментальный и может вызвать непредвиденные ошибки, так что не рекомендуется его использовать.
+- Парсер теперь пишет информацию о матче, название команды и никнейм игрока на первых шагах загрузки.
+- Теперь парсер не добавляет в очередь на загрузку матчи, где команды ещё неизвестны.
+- Теперь парсер пытается повторно загрузить HTML, если загрузка не удалась. Количество попыток можно указать в конфиг файле в параметре
+download_count_retries (max 20). Это изменение является частью исправления бага, когда багфикс бесконечной загрузки вызывал падение парсера.
+- Косметическое улучшение конфиг файла
+
+
+
+0.4.8 alpha:
+- Исправлен баг с бесконечной загрузкой.
+
+0.4.7 alpha:
+- Парсер больше не может работать с HLTV как робот. Теперь он вынужден притворяться браузером Chrome.
+
+0.4.6 alpha:
+- Небольшое улучшение в алгоритме поиска игроков на странице матча.
+
+0.4.5 alpha:
+- Исправлен незначительный баг со списком URL на статистику игроков, которую нужно было обновить.
+- Исправлен баг когда парсер падал при встрече с TBD.
+
+0.4.4 alpha:
+Обновление парсера в связи с изменениями на HLTV (в статистику команд добавлены значения CT и T round win percent, в парсер эти колонки будут 
+добавлены в версии 0.5.0 alpha).
+
+0.4.3 alpha:
+- Исправлен баг, когда парсер принимал TBA за игрока.
+
+0.4.2 alpha:
+- Исправлен баг когда парсер не прерывал загрузку статистики, если загрузка последней карты была провалена.
+
+0.4.1 alpha:
+- Порядок обновления матчей теперь соответсвует их дате.
+- Исправлен критический баг когда парсер не проверял количество игроков, участвующих в матче.
+
+0.4.0 alpha:
+- Большой рефакторинг исходного кода: большие методы разбиты на маленькие, добавлен новый класс Program, в который помещены глобальные методы 
+и переменные, все остальные классы стали наследниками класса Program.
+- В таблице со статистикой команд появились новые столбцы, добавляющие статистику на картах, которые есть на HLTV, но не находятся в активном
+маппуле. Это сделано, чтобы подготовиться к будущему изменению активного маппула.
+- Добавлен конфигурационный файл. Этот файл можно использовать для задавания имени БД и выбрать карты, которые находятся в активном маппуле.
+Статистика на этих картах будет загружаться при запуске парсера.
+- БД теперь автоматически бекапируется после проверки.
+- Когда игрок переходит из одной команды в другую, в БД информация о бывшем игроке не обновлялась, из-за чего этот игрок считался как всё ещё
+присутствующий в команде. Теперь парсер проверяет принадлежность каждого игрока к команде, если обнаружит больше 5 человек в команде. Этот
+этап загрузки происходит после загрузки всех предстоящих матчей.
+- В некоторых случаях парсер может пропустить загрузку матча, если вовремя загрузки что-то пошло не так.
+- Раньше для обновления статистики команд и игроков после сгранных матчей парсер переобновлял уже существующие матчи с этими командами. Теперь
+парсер между этапом обновления и загрузки новых матчей обновляет статистику игроков и матчей напрямую, без дополнительного обновления матчей.
+
+
+
+0.3.2, 0.3.3 alpha:
+- Обновления парсера в связи с изменениеями на HLTV.
+
+0.3.1 alpha:
+- Исправлен критический баг когда парсер падал при попытке узнать находится ли запись в БД.
+
+0.3.0 alpha:
+- ID записей стали загружаться с HLTV (эти ID можно было заметить в URL)
+- Добавлен контроль версий БД.
+- Теперь парсер попросит пользователя создать новую БД, если текущая БД не прошла проверку. Старая БД не удаляется, а сохраняется с 
+окончанием _old.
+- Парсер теперь проверяет не только наличие таблиц, но и содержащиеся в них колонки и их порядок.
+- В некоторых случаях URL на матч менялся на стороне HLTV. Теперь парсер учитывает это и меняет URL, если замечено изменение.
+
+
+
+0.2.10fx alpha:
+- Исправлен баг когда парсер падал при неудачной попытке получить ID
+
+0.2.10 alpha:
+- Исправлен баг когда парсер падал при проваленой попытке загрузить HTML
+- Небольшой рефакторинг исходного кода
+
+0.2.9 alpha:
+- Обновление алгоритма сбора ссылок на игроков в связи с обновлением HLTV
+
+0.2.8 alpha:
+- Добавление недостающих комментариев в исходный код
+- Небольшой рефакторинг исходного кода
+
+0.2.7 alpha:
+- Добавлена проверка БД после её создания
+
+0.2.6 alpha:
+- Исправлен баг, когда в очередь обновляемых матчей добавлялся завершённый матч.
+
+0.2.1 - 0.2.5 alpha:
+- Различные исправления и обновления в связи с изменениями на HLTV
+
+0.2.0 alpha:
+* Код переписан в стиль ООП:
+
+- Добавлены классы:
+1. Database - класс БД:
+2. Map_stats - класс статистики команды на карте
+3. Match - класс матча с информацией о нём
+4. Team - класс команды с информацией о нёй и статистикой
+5. Player - класс игрока с информацией о нём и статистикой
+- Проверка БД внедрена в метод create
+- Загружаемые данные сохраняются в поля объектов.
+- У каждого объекта (кроме Database) есть методы get, которые возвращают загруженные данные.
+
+* Изменения в алгоритме парсера:
+- Парсер теперь не сбрасывает соединение с БД до тех пор, пока не удалён объект Database.
+- Если БД не проходит проверку, парсер автоматически удаляет повреждённую БД и создаёт новую.
+- В предыдущей версии перед каждой загрузкой матча требовалось подтверждение. Теперь эту функцию можно отключить, если отказаться от запуска 
+в debug mode.
+- Если обновляемый матч завершён, в список загружаемых предстоящих матчей добавляются матчи с участием сыгравших команд. Это нужно, чтобы 
+обновить статистику сыгравших команд.
+- Если обновляемый матч отменён, он удаляется из БД.
+- Если обновляемый матч отложен, его обновление пропускается.
+- Теперь парсер загружает на статистику не за всё время, а за последние 3 месяца.
+
+
+
+Legacy (private repository):
+* Алгоритм парсера:
+1. Подключение и проверка БД. Если БД не существует, она создаётся заново.
+2. Если в БД есть записи о предстоящих матчах, обновить эти данные (загрузка данных о матчах)
+3. Загрузка списка предстоящих матчей и его очистка от существующих в БД
+4. Загрузка данных о матчах, учавствующих в них командах и игроках (цикл для каждого матча):
+- Загрузка информации о матче, URL на информацию и статистику команд и игроков
+- Загрузка информации и статистики команды за последние 3 месяца
+- Загрузка информации и статистики игроков за последние 3 месяца
+- Повторение последних 2 шагов для второй команды
+- Запись полученных данных в БД
+Цикл может прерваться, если:
+- Неизвестна хотя бы 1 команда, участвующая в матча
+- Неизвестен хотя бы 1 игрок, участвующий в матче
+- Отсутствует или загружена неполная статистика хотя бы 1 команды (должна быть статистика хотя бы на 1 из карт активного пула)
+- Отсутствует или загружена неполная статистика хотя бы 1 игрока
+
+* Структура БД:
+1. players:
+
+1.1 ID - номер игрока
+1.2 Player - никнейм игрока
+1.3 Current_team - имя команды, в которой игрок состоит
+1.4 - 1.27 - статистика игрока (пример: https://www.hltv.org/stats/players/individual/484/Zeus )
+1.28 Rating_2_0 - рейтинг игрока
+1.29 Link - URL игрока
+
+2. teams:
+
+2.1 ID - номер команды
+2.2 Team - имя команды
+2.3 Rating - рейтинг команды
+2.4 - 2.73 - статистика команды на каждой карте (пример: https://www.hltv.org/stats/teams/map/32/4608/Natus%20Vincere для каждой карты)
+2.74 Link - URL команды
+
+3. matches_upcoming:
+
+3.1 ID - номер матча
+3.2 Team_1 - имя команды 1
+3.3 Team_2 - имя команды 2
+3.4 Date_match - дата матча в формате yyyy-mm-dd hh:mm:ss.msmsms
+3.5 Format_match - сколько карт играется в матче (bo1, bo2, bo3, bo5, bo7)
+3.6 Maps - список карт, на которых будет проводиться матч
+3.7 Link - URL матча
+
+4. matches_completed:
+
+3.1 ID - номер матча
+3.2 Team_1 - имя команды 1
+3.3 Team_2 - имя команды 2
+3.4 Date_match - дата матча в формате yyyy-mm-dd hh:mm:ss.msmsms
+3.5 Format_match - сколько карт играется в матче (bo1, bo2, bo3, bo5, bo7)
+3.6 Maps - список карт, на которых будет проводиться матч
+3.7 Result_full - результат матча на каждой карте
+3.8 Result_maps - общий результат матча по выигранным картам
+3.9 Link - URL матча
+
+* Особенности:
+- The parser is written in a procedural style.
+- Перед загрузкой любого HTML существует задержка в 1 секунду.
+- Парсер просит подверждение загрузки перед каждым матчем.
+- В БД не записываются данные о матчах, где команды, игроки или их статистика неизвестна.
+- Если матч завершён, он записывается в matches_completed и удаляется из matches_upcoming.
+- Обновление данных происходит удалением старой записи и вставкой новых, а не через UPDATE.
+- Парсер инициирует соединение с БД каждый раз, когда записываются или удаляются данные, после чего закрывает соединение.
+- В таблице teams статистика команд записывается на 7 картах из активного маппула. Если активный пул изменится, парсер будет записывать в столбцы
+статистики на этой карте нули. Необходиом обновление парсера в случае изменения активного маппула!
+- Парсер не обновляет полностью таблицы teams и players. Он будет обновлять только те команды и игроков, которым предстоит играть матч.
+- Парсер не учитывает stand-ins. Если игрок изначально играет в другой команде, а в матче играет за другую команду как stand-in, его значение
+Current_team не будет изменено.
+- Бывает так, что игрок переходит в другую команду, но на стороне HLTV информация о нём не обновлена. Парсер не учитывает такие случаи.

@@ -1903,11 +1903,14 @@ class Player(Program):
                 rows[i] = rows[i].replace(self.__table_rows_names[i], '')
                 if((i == 10) or (i == 11)):
                     rows[i] = rows[i][0:len(rows[i])-1]
-                if (rows[i] == ''):
-                    rows[i] = 0
-                rows[i] = float(rows[i])
-                if(rows[i].is_integer()):
+                if (rows[i].isdigit()):
                     rows[i] = int(rows[i])
+                elif '.' in rows[i]:
+                    rows[i] = float(rows[i])
+                    if (rows[i].is_integer()):
+                        rows[i] = int(rows[i])
+                else:
+                    rows[i] = 0
             return rows
         else:
             self.log_and_print('Error: the stats table not exist.')
@@ -1924,7 +1927,7 @@ if (import_cfg):
     program.log_and_print('Config imported successfully.')
 else:
     program.log_and_print('Parser terminated with error.')
-program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.5 alpha.')
+program.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.5.6 alpha.')
 while (program.repeat_mode + 1 > 0):
     DB_ready = program.DB.check()
     if (not DB_ready):
