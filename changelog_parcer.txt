@@ -2,6 +2,121 @@ Changelog hltv_parcer:
 
 English:
 
+0.6.0 alpha:
+Almost complete refactoring of the source code and changes in the algorithm. This update can be called the most extensive, which is why it may 
+contain a lot of bugs and malfunctions that did not manifest themselves in time for development.
+
+* Now the parser uses a different algorithm:
+1. Importing settings from a file.
+2. If you need to update the database, an update will be performed. Please note that if you have a large database, the update will take a long 
+time. Still it will take longer if you use proxies, which will be discussed later. From this version of the database, build versions older than 4
+will not be updated. To update them, use previous versions of the parser (preferably 0.5.5 alpha).
+3. If proxies are specified, the parser will check whether they are banned on HLTV or not. The parser will select the fastest proxy and work 
+through it. The proxy will be discussed later.
+4. The parser loads a list of upcoming matches. Each match contains information taken from the first page ( https://www.hltv.org/matches ).
+Based on this data, the parser does the following:
+- If a match is already uploaded to the database and the primary data matches the data from the database, it is removed from the list (it will not 
+be updated). The exception is when there is not enough data in the database, in which case the match will be updated.
+- The parser will not remove matches from the list where teams or players are unknown or their statistics status is unknown. It will load them,
+but will indicate in the database what data is missing.
+- The parser will not load matches where both teams are unknown, but will write some data about them to the database to update them in the future.
+5. Parser will write that step 1 of 6 has started: updating existing matches. The parser now collects a little more data about the match, but
+more information about the data will be mentioned in the paragraph about the database later. When loading each match, the parser generates URLs 
+to team and player statistics. The object of the Parcer class has lists, where these URLs are written, but at this stage they will be written 
+there if:
+- The match is over
+- Updated information about the player or team
+It is also important to note that in this and the next step, the parser excludes duplicate URLs to statistics. As soon as the match information is
+uploaded, it will be immediately written in the database.
+6. Step 2 of 6: upload new matches. The stage is similar to the previous one, but there is a difference in writing URLs to statistics of players 
+and teams: if the date of the last data upload was recently (less than a month ago) and later than the last match, these URLs will not be 
+written, as they will be contain the same statistics (they didn't play any other matches, right?). If the match is new or a team that has not 
+played for a long time is playing, URLs to their statistics will be saved.
+7. 3 step 6: load statistics on the teams. In General, no changes, except that the parser now writes the update date to the database.
+8. 4 step 6: load statistics on the players. Similar to the previous step.
+9. 5 step 6: verify the location of players in current teams. The algorithm has not changed from the previous version.
+10. step 6 of 6: dumping matches. This is so to speak, creating a "snapshot" of the match and data about statistics before matches, and then 
+updating the result in them. Dumps are saved in a separate dump table. Only matches whose status is Match upcoming are recorded in this table 
+(more on statuses later).
+
+* Features of source code refactoring:
+- A lot of work has been done to reduce the number of lines of code (1256 vs 1981 from version 0.5.5).
+- The entire source code has been divided into separate files for each class to better navigate it.
+- The source code now uses more "try" blocks, as well as creates its own exceptions. This greatly simplified the perception of code in classes
+Match, Team, and Player, because now don't need to write a lot of "if" branches in them if something wrong on the page.
+- The MapStats class was combined with the Team class, because when the code was reduced, it was too small to leave it as a separate class.
+- Added a new Parcer class. It includes all the features of the parser that load data.
+- The Program class became the father class, which includes all the methods that are often used when executing other classes. If you compare with
+the old version, all the functions that should not have been inherited are mixed in Parcer, and Program is now responsible only for importing
+the config.
+- When refactoring, attention was paid to comments to make it a little easier to understand the code. Comments may not be present everywhere, but
+they will be added as updates are made.
+- Constructors of the Match, Team, and Player classes now load data from HLTV immediately. The data fields are also combined into a single data 
+field. This made it easier to access data and reduce the number of unnecessary lines of code.
+
+* Database features:
+- The matches_upcoming and matches_completed tables are combined into 1 matches table. This was made possible by adding the status field, which
+indicates whether the match is finished or not. Also, the Result_maps field was removed because it didn't make sense.
+- Added a dump table that adds "snapshot" of matches. Let's say you saw the upcoming match and statistics on teams and players. All this data
+is included in the "snapshot", and then the result is updated so that you can evaluate the impact of statistics on this match (this functionality
+will probably not be added in the parser).
+- The structure of the matches table now looks like this:
+
+1 id - the ID of the match
+2 title - title of the match
+3 team_1_id - ID of team 1
+4 team_2_id - ID of team 2
+5 team_1_players_id - IDs of the players of team 1
+6 team_2_players_id - IDs of the players the team 2
+7 date - match date in the format yyyy-mm-dd hh:mm:ss.msmsms
+8 tournament - the tournament in which the match is held
+9 format - how many maps will be played in this match (bo1, bo2, bo3, bo5, bo7)
+10 maps - list of maps that will be played in this match
+11 status - match status for the parser. About the status a little later
+12 result - the result of the match on each map
+13 url - URL for the match
+
+The status can take the following values:
+- Match upcoming: the match has not started yet and all statistics about participating teams and players already written in the database.
+- LIVE: the match is on.
+- Match over: the match is over.
+- Match postponed: the match is postponed.
+- Teams unknown: both teams participating in the match are unknown
+- Team [1 or 2] unknown: one of the teams in this match is unknown
+- [1, 2, 3... 10] player(s) unknown: one or more players are unknown or have no statistics
+
+- The dump table structure looks like this:
+1-11 - repeating the structure of the matches table
+12-277 - repeating the structure of the teams table without the first 2 and last 2 fields (only statistics and rating of 2 teams, 133 fields for 
+each team)
+278-528 - repeating the structure of the players table without the first 3 and last 2 fields (only statistics and rating of 10 players, 25 fields 
+for each player)
+
+- All field names have been reduced to lowercase for better understanding of SQL commands.
+- For more information about the database structure, see the file DB_structure.py. Just do not think that this Is an unnecessary file - it is 
+necessary!
+
+* Features of the configuration file:
+- Added setting of the log file name.
+- Added configuration of the proxy server operation mode. When enabling this mode, you must specify 1 or more (comma-separated) IP addresses
+proxy in square brackets below. Make sure that the proxies you enter are stable, fast, support HTTPS, and are not banned from HLTV. If
+the connection to the proxy is unstable, recommend increasing the download_html_count_retries setting to 20. This setting can help you avoid 
+being banned IP addresses of the machine running the parser, especially when updating a large database.
+- Removed the repeat_mode setting that allowed you to leave the parser running automatically in a day. This Function was experimental and caused 
+a lot of problems with the parser, so we decided to remove it.
+
+* Other features:
+- The parser shows the progress bar when it performs a database update or 1 of the steps of its main work. This progress bar is not writing in 
+the log file.
+- Previously, the parser displayed data "as is" as a tuple or list. Now it outputs a pseudo-table with data instead. Some tables look bulky, so 
+I recommend that you expand the console's window to full screen for a better view. These tables are also duplicated in log file, but with a 
+different tab formatting (4 characters per tab instead of 8). Because of this, pseudo-tables may not look right in some text editors 
+(I recommend using Notepad++).
+- Since the source code is divided into different files, you need to execute the file to run the parser run_parcer.py.
+- Each time the parser starts, it backs up a new copy of the database with the date and time specified in the file name instead of replacing the backed-up database file. This should
+allow you to track the time of unwanted changes, but it may take up a lot of disk space. Keep track of the number of backups and delete them in time!
+
+
 0.5.6 alpha:
 - Fixed a critical bug when loading player statistics, the parser ran into the value "NaN" and crashed when trying to convert it to a number.
 
@@ -221,6 +336,118 @@ Current_team will not be changed.
 - It happens that a player moves to another team, but on the HLTV side information about him is not updated. The parser does not take consider such cases.
 
 Русский:
+
+0.6.0 alpha:
+Практически полный рефакторинг исходного кода и изменения в алгоритме. Это обновление можно назвать самым масштабным, из-за чего может содержать
+множество багов и неисправностей, которые не проявляли себя вовремя оразработки.
+
+* Теперь парсер работает по другому алгоритму:
+1. Импортирование настроек из файла.
+2. Если требуется обновить БД, будет произведено обновление. Стоит учесть, что если у вас большая БД, то обновление займёт много времени. Ещё
+больше времени оно займёт, если вы будете использовать прокси, о которых будет сказано позже. С этой версии БД версии билда старше 4 обновляться 
+не будут, для их обновления используйте предыдущие версии парсера (желательно 0.5.5 alpha).
+3. Если указаны прокси, парсер проверит забанены ли они на HLTV или нет. Парсер выберет самый быстрый прокси и будет работать через него. О прокси 
+будет написано позже.
+4. Парсер загружает список предстоящих матчей. Каждый матч содержит информацию, взятую с первой страницы ( https://www.hltv.org/matches ). На 
+основе этих данных парсер делает следующее:
+- Если матч уже загружен в БД и первичные данные совпадают с данными из БД, он удаляется из списка (не будет обновляться). Исключением являются
+моменты, когда данных в БД не хватает, в этом случае матч будет обновлён
+- Парсер не будет удалять из списка матчи, где команды или игроки или их статиcтика неизвестна. Он загрузит их, но укажет в БД о том каких данных 
+не хватает.
+- Парсер не будет загружать матчи, где незвестны обе команды, но запишет часть данных о них в БД, чтобы обновить их в будущем.
+5. Далее парсер будет писать, что начался 1 шаг из 6: обновление существующих матчей. Парсер теперь собирает немного больше данных о матче, но 
+подробнее о данных будет упомянуто в абзаце про БД позже. При загрузке каждого матча парсер генерирует URL'ы на статистику команды и игроков.
+У объекта класса Parcer есть списки, куда записываются эти URL'ы, но на данном этапе они будут записаны туда, если:
+- Матч окончен
+- Обновилась информация об игроке или команде
+Так же важно отметить, что в этом и следующем шаге парсер исключает дублирование URL'ов на статистики. Как только информация о матче будет 
+загружена, она сразу будет записана в БД.
+6. 2 шаг из 6: загрузка новых матчей. Этап схож с предыдущим, но здесь есть отличие в записи URL'ов на статистики игроков и команд: если дата
+последней загрузки данных происходила недавно (меньше месяца назад) и позже последнего матча, то эти URL'ы не будут записаны, так как будут
+содержать ту же статистику (ведь они не играли других матчей, верно?). Если матч новый или играет команда, которая уже давно не играла, URL'ы на
+их статистики будут сохранены.
+7. 3 шаг из 6: загрузка статистики о командах. В целом, никаких изменений, за тем исключением, что парсер теперь записыват в БД дату обновления.
+8. 4 шаг из 6: загрузка статистики об игроках. Аналогична предыдущему шагу.
+9. 5 шаг из 6: проверка нахождения игроков в текущих командах. Алгоритм не изменился с предыдущей версии.
+10. 6 шаг из 6: дампинг матчей. Это так сказать создание "слепка" матча и данных о статистиках перед матчей, а затем обновление в них результата.
+Дампы сохраняются в отдельную таблицу dump. В эту таблицу записываются только те матчи, чей статус Match upcoming (о статусах позже).
+
+* Особенности рефакторинга исходного кода:
+- Проведена большая работа по сокращению количества строк кода (1256 против 1981 из версии 0.5.5). 
+- Весь исходный код стал разбит на отдельные файлы для каждого класса, чтобы лучше ориентироваться в нём.
+- Исходный код теперь использует больше блоков "try", а так же создаёт собственные исключения. Это очень упростило восприятие кода в классах
+Match, Team и Player, ведь теперь в них не нужно писать множество ветвей "if", если что-то на странице написано не так.
+- Класс MapStats был совмещён с классом Team, так как при сокращении кода он оказался слишком маленьким, чтобы оставлять его как отдельный класс.
+- Добавлен новый класс Parcer. В него вошли все функции парсера, которые загружают данные.
+- Класс Program стал отцом-классом, в который вошли все методы, которые часто используются при исполнении других классов. Если сравнивать со
+старой версией, то все функции, которые не должны были наследоваться, перемешены в Parcer, а Program теперь отвечает только за импортирование
+конфига.
+- При рефакторинге было уделено внимание комментариям, чтобы понимать код было немного проще. Возможно, комментарии присутствуют не везде, но по 
+мере обновлений они буду дописываться.
+- Конструкторы классов Match, Team и Player теперь сразу загружают данные с HLTV. Так же поля с данными объединены в единое поле data. Это позволило
+упростить доступ к данным и сократить число ненужных строк кода.
+
+* Особенности БД:
+- Таблицы matches_upcoming и matches_completed объединены в 1 таблицу matches. Это стало возможно благодаря добавлению поля status, которое и
+показывает на то закончен матч или нет. Также поле Result_maps было удалено, так как не имело смысла.
+- Добавлена таблица dump, которая добавляет "слепки" матчей. Скажем, вы видели готовящийся матч и статистику на команды и игроков. Вся эти данные
+входят в "слепок", а потом обновляется результат, чтобы можно было оценить влияние статистики на этот матч (такой функционал в парсере скорее
+всего не будет добавлен).
+- Страктура таблицы matches теперь выглядит так:
+
+1 id - идентификатор матча
+2 title - заглавие матча
+3 team_1_id - идентификатор команды 1
+4 team_2_id - идентификатор команды 2
+5 team_1_players_id - идентификаторы игроков команды 1
+6 team_2_players_id - идентификаторы игроков команды 2
+7 date - дата матча в формате yyyy-mm-dd hh:mm:ss.msmsms
+8 tournament - турнир, в рамках которого проводится матч
+9 format - сколько карт будет сыграно в этом матче (bo1, bo2, bo3, bo5, bo7)
+10 maps - список карт, которые будут играться на данном матче
+11 status - статус матча для парсера. О статусах немного позже
+12 result - результат матча на каждой карте
+13 url - URL на матч
+
+Статус может принимать следующие значения:
+- Match upcoming: матч ещё не начался и вся статистика об учавствующих в них командах и игроках записана в БД.
+- LIVE: матч идёт.
+- Match over: матч окончен.
+- Match postponed: матч отложен.
+- Teams unknown: неизвестны обе команды, участвующие в матче
+- Team [1 или 2] unknown: одна из команд данного матча неизвестна
+- [1, 2, 3... 10] player(s) unknown: один или несколько игроков незвестны или у них отсутствует статистика
+
+- Структура таблицы dump выглядит так:
+1-11 - повторение структуры таблицы matches
+12-277 - повторение структры таблицы teams без первых 2 и последних 2 полей (только статистика и рейтинг 2-х команд, по 133 поля на каждую команду)
+278-528 - повторение структры таблицы players без первых 3 и последних 2 полей (только статистика и рейтинг 10 игроков, по 25 полей на каждого 
+игрока)
+
+- Все имена полей были приведены к нижнему регистру для лучшего восприятия SQL-команд.
+- Подробнее структуру БД можно увидеть в файле DB_structure.py. Только не считаёте, что это ненужный файл - он нужный!
+
+* Особенности конфигурационного файла:
+- Добавлена настройка имени файла лога.
+- Добавлена настройка режима работы через прокси-сервер. При включении этого режима вы должны указать 1 или несколько (через запятую) IP-адресов
+прокси в квадратных скобках ниже. Убедитесь, что вводимые вами прокси работают стабильно, быстро, поддерживают HTTPS и не забанены на HLTV. Если
+соединение с прокси нестабильно, рекомендуется увеличить настройку download_html_count_retries до 20. Данная настройка может помочь избежать бана 
+IP-адреса машины, на которой запущен парсер, особенно это может потребоваться при обновлении большой БД.
+- Убрана настройка repeat_mode, позволявшая оставить парсер, который автоматически будет запускаться через сутки. Эта Функция была
+экспериментальной и вызывала много проблем при работе парсера, поэтому было решено её убрать.
+
+* Другие особенности:
+- Парсер демонстрирует прогресс бар, когда выполняет обновление БД или 1 из шагов его основной работы. Этот прогресс бар не записывается в лог 
+файл.
+- Раньше парсер выводил на экран данные "как есть" в виде кортежа или списка. Теперь вместо этого он выводит псевдо-таблицу с данными. Некоторые
+таблицы выглядят громоздкими, поэтому для их лучшего вида рекомендуется развернуть окно консоли на весь экран. Эти таблицы так же дублируются в
+лог файл, но с другим форматированием табуляций (4 символа на табуляцию вместо 8). Из-за этого в некоторых текстовых редакторах псевдо-таблицы
+могут выглядеть неправильно (рекомендуется использовать Notepad++).
+- Так как исходный код разбит на разные файлы, для запуска парсера нужно исполнять файл run_parcer.py.
+- При каждом запуске парсер бекапирует новую копию БД с указанием даты и в времени в имени файлы вместо замены бекапируемого файла БД. Это должно
+розволить отследить момент нежелательных изменений, но может занимать много места на диске. Следите за количеством бекапов и вовремя удаляйте их!
+
+
 
 0.5.6 alpha:
 - Исправлен критический баг, когда при загрузке статистики игрока парсер натыкался на значение "NaN" и падал при попытке преобразовать его в число.
