@@ -2,6 +2,9 @@ Changelog hltv_parcer:
 
 English:
 
+0.6.1 alpha:
+- Fixed a bug when the parser updated the current_team value to the wrong player at step 5.
+
 0.6.0 alpha:
 Almost complete refactoring of the source code and changes in the algorithm. This update can be called the most extensive, which is why it may 
 contain a lot of bugs and malfunctions that did not manifest themselves in time for development.
@@ -336,6 +339,9 @@ Current_team will not be changed.
 - It happens that a player moves to another team, but on the HLTV side information about him is not updated. The parser does not take consider such cases.
 
 Русский:
+
+0.6.1 alpha:
+- Исправлен баг, когда на 5 шаге работы парсер обновлял значение current_team не тому игроку.
 
 0.6.0 alpha:
 Практически полный рефакторинг исходного кода и изменения в алгоритме. Это обновление можно назвать самым масштабным, из-за чего может содержать

@@ -117,7 +117,7 @@ class Parcer(Program):
                 else:
                     raise ParcerException('Database corrupted, but user cancelled creating new database.')
             else:
-                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.0 alpha.')
+                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.1 alpha.')
                 run_parcer = self.question('Start parcer? (Y/n): ')
                 if not run_parcer:
                     raise ParcerException('Start cancelled.')
@@ -251,7 +251,7 @@ class Parcer(Program):
                         self.log_and_print(player_obj)
                         if current_team != player_obj.data[2]:
                             self.log_and_print('Player "{}" change current team at {}. Writing into database...'.format(update_player[1], player_obj.data[2]))
-                            self.DB.update_current_team(player[0], player_obj.data[2])
+                            self.DB.update_current_team(player_obj.data[0], player_obj.data[2])
                 current_team = player[2]
                 players_current_team = [player]
             Program.loading_progress['loading_points'] += 1

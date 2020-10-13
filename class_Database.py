@@ -301,7 +301,7 @@ class Database(Program):
         player = self.__CURSOR.fetchall()
         if not player:
             raise DatabaseException('Database error while updating current team of player: ID "{}" not found).'.format(str(ID)))
-        self.__CURSOR.execute('UPDATE players SET current_Team = "{}" WHERE id = {};'.format(current_team, str(ID)))
+        self.__CURSOR.execute('UPDATE players SET current_team = "{}" WHERE id = {};'.format(current_team, str(ID)))
         self.__CONN.commit()
 
     def get_date_last_update(self, ID, table=''):
