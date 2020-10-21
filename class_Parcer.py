@@ -117,7 +117,7 @@ class Parcer(Program):
                 else:
                     raise ParcerException('Database corrupted, but user cancelled creating new database.')
             else:
-                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.1 alpha.')
+                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.2 alpha.')
                 run_parcer = self.question('Start parcer? (Y/n): ')
                 if not run_parcer:
                     raise ParcerException('Start cancelled.')
@@ -133,7 +133,7 @@ class Parcer(Program):
                     for old_match in old_upcoming_matches: # generate list of upcoming matches, that downloaded, but his data not changed
                         for new_match in new_upcoming_matches:
                             if old_match[0] == new_match[0]:
-                                if old_match[:-1] == new_match and old_match[-1] == 'Match upcoming':
+                                if old_match[:-1] == new_match and (old_match[-1] == 'Match upcoming' or old_match[-1] == 'Teams unknown'):
                                     old_matches_not_need_update.append(old_match)
                                 break
                     IDs_old_upcoming_matches = [match[0] for match in old_upcoming_matches]
@@ -155,6 +155,7 @@ class Parcer(Program):
                                 break
                     for match in matches_where_both_teams_still_unknown: # clearing old matches where teams still unknown
                         new_matches_not_need_download.remove(match)
+                        old_matches_where_teams_unknown.remove(match)
                     new_matches_not_need_download = tuple((match[0], match[1], None, None, None, None, match[2], match[3], match[4], ', '.join(['TBA'] * match[4]), 'Teams unknown', None, match[5]) for match in new_matches_not_need_download)
                     if new_matches_not_need_download:
                         self.log_and_print('Writing matches where teams unknown in database.')
@@ -210,7 +211,8 @@ class Parcer(Program):
 
     def download_teams(self):
         self.log_and_print('Step 3: Downloading teams stats...')
-        self.init_progress_bar('Step 3 of 6: Downloading teams stats', len(self.teams) * 13)
+        maps = ('cache', 'cobblestone', 'dust2', 'inferno', 'mirage', 'nuke', 'overpass', 'season', 'train', 'tuscan', 'vertigo')
+        self.init_progress_bar('Step 3 of 6: Downloading teams stats', len(self.teams) * (len(tuple(Program.settings[map_cs] for map_cs in maps if Program.settings[map_cs] == True)) + 2))
         for team in self.teams:
             team_obj = Team(*team) # download team stats
             self.log_and_print(team_obj)

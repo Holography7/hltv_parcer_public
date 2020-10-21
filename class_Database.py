@@ -229,7 +229,7 @@ class Database(Program):
     def get_upcoming_matches_short(self):
         """Getting the short data of upcoming matches."""
         """Получение короткой информации предстоящих матчей."""
-        self.__CURSOR.execute('SELECT id, title, date, tournament, format, url, status FROM matches WHERE status != "Match over" AND status != "Teams unknown" ORDER BY date;')
+        self.__CURSOR.execute('SELECT id, title, date, tournament, format, url, status FROM matches WHERE status != "Match over" ORDER BY date;')
         return self.__CURSOR.fetchall()
 
     def get_upcoming_matches_full(self):

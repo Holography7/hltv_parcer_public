@@ -94,5 +94,6 @@ class Team(Program):
             except (AttributeError, TypeError) as e:
                 raise TeamException('Team stats error while downloading HTML: {} not found.'.format(titles_data[len(self.data)]))
         self.data = tuple(self.data)
-        if added_loading_points < 13:
-            Program.loading_progress['loading_points'] += 13 - added_loading_points
+        maps_all = ('cache', 'cobblestone', 'dust2', 'inferno', 'mirage', 'nuke', 'overpass', 'season', 'train', 'tuscan', 'vertigo')
+        if added_loading_points < (len(tuple(Program.settings[map_cs] for map_cs in maps_all if Program.settings[map_cs] == True)) + 2):
+            Program.loading_progress['loading_points'] += (len(tuple(Program.settings[map_cs] for map_cs in maps_all if Program.settings[map_cs] == True)) + 2) - added_loading_points
