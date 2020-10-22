@@ -2,6 +2,9 @@ Changelog hltv_parcer:
 
 English:
 
+0.6.3 alpha:
+- Fixed a bug when a match with the status "Teams unknown" changed only the title, but the parser tried to update it in step 1, which caused it to crash.
+
 0.6.2 alpha:
 - Fixed a bug where the parser did not update some matches with the status "Teams unknown", information about which was actually updated.
 - Slight improvement in the calculation of download progress at step 3.
@@ -343,6 +346,9 @@ Current_team will not be changed.
 - It happens that a player moves to another team, but on the HLTV side information about him is not updated. The parser does not take consider such cases.
 
 Русский:
+
+0.6.3 alpha:
+- Исправлен баг, когда у матча со статусом "Teams unknown" изменилось лишь заглавие, но парсер пытался обновить его в 1 шаге, из-за чего падал.
 
 0.6.2 alpha:
 - Исправлен баг, когда парсер не обновлял некоторые матчи со статусом "Teams unknown", информация о которых на самом деле обновилась.

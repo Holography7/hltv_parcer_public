@@ -117,7 +117,7 @@ class Parcer(Program):
                 else:
                     raise ParcerException('Database corrupted, but user cancelled creating new database.')
             else:
-                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.2 alpha.')
+                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.3 alpha.')
                 run_parcer = self.question('Start parcer? (Y/n): ')
                 if not run_parcer:
                     raise ParcerException('Start cancelled.')
@@ -128,6 +128,7 @@ class Parcer(Program):
                     raise ParcerException('Parcer error while downloading HTML <- {}'.format(str(e)))
                 else:
                     new_upcoming_matches = [tuple([self.get_id_from_url(match['href']), get_match_title(match), datetime.fromtimestamp(float(match.find('div', class_='matchTime')['data-unix']) / 1000).isoformat(' ') + '.000', get_match_tournament(match), int(match.find('div', class_='matchMeta').text[-1]), 'https://www.hltv.org' + match['href']]) for match in soup.find(class_='upcomingMatchesWrapper').find_all('a', class_='match a-reset')] # All downloaded upcoming matches. List will have IDs, titles, dates, tournaments and URLs
+                    new_matches_not_need_download = [match for match in new_upcoming_matches if ' vs ' not in match[1]] # matches where teams unknown not need to download, their information is already available
                     old_upcoming_matches = self.DB.get_upcoming_matches_short() # getting IDs, titles, dates, tournaments, formats, URLs and Status of upcoming matches that already downloaded in past. It's needed to update in future.
                     old_matches_not_need_update = []
                     for old_match in old_upcoming_matches: # generate list of upcoming matches, that downloaded, but his data not changed
@@ -136,15 +137,16 @@ class Parcer(Program):
                                 if old_match[:-1] == new_match and (old_match[-1] == 'Match upcoming' or old_match[-1] == 'Teams unknown'):
                                     old_matches_not_need_update.append(old_match)
                                 break
-                    IDs_old_upcoming_matches = [match[0] for match in old_upcoming_matches]
-                    for i in range(len(new_upcoming_matches) - 1, -1, -1): # cleaning upcoming matches that already downloaded
+                    IDs_old_upcoming_matches = [match[0] for match in old_upcoming_matches] # cleaning upcoming matches that already downloaded
+                    for i in range(len(new_upcoming_matches) - 1, -1, -1):
                         if new_upcoming_matches[i][0] in IDs_old_upcoming_matches:
                             new_upcoming_matches.pop(i)
                     for old_match in old_matches_not_need_update: # clearing downloaded upcoming matches that information not changed
                         old_upcoming_matches.remove(old_match)
-                    new_matches_not_need_download = [match for match in new_upcoming_matches if 'vs' not in match[1]] # matches where teams unknown not need to download, their information is already available
-                    for match in new_matches_not_need_download:
-                        new_upcoming_matches.remove(match)
+                    IDs_matches_not_need_download = [match[0] for match in new_matches_not_need_download]
+                    for i in range(len(new_upcoming_matches) - 1, -1, -1):
+                        if new_upcoming_matches[i][0] in IDs_matches_not_need_download:
+                            new_upcoming_matches.pop(i)
                     old_matches_where_teams_unknown = self.DB.get_upcoming_matches_both_teams_unknown() # matches where teams unknown in database
                     matches_where_both_teams_still_unknown = []
                     for old_match in old_matches_where_teams_unknown:
@@ -152,10 +154,11 @@ class Parcer(Program):
                             if old_match[0] == new_match[0]:
                                 if old_match[1] == new_match[1]:
                                     matches_where_both_teams_still_unknown.append(new_match)
+                                elif ' vs ' not in new_match[1]:
+                                    old_upcoming_matches.remove((*old_match, 'Teams unknown'))
                                 break
                     for match in matches_where_both_teams_still_unknown: # clearing old matches where teams still unknown
                         new_matches_not_need_download.remove(match)
-                        old_matches_where_teams_unknown.remove(match)
                     new_matches_not_need_download = tuple((match[0], match[1], None, None, None, None, match[2], match[3], match[4], ', '.join(['TBA'] * match[4]), 'Teams unknown', None, match[5]) for match in new_matches_not_need_download)
                     if new_matches_not_need_download:
                         self.log_and_print('Writing matches where teams unknown in database.')
