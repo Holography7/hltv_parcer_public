@@ -2,6 +2,10 @@ Changelog hltv_parcer:
 
 English:
 
+0.6.5 alpha:
+- Fixed a bug when the parser tried to find a match from the dump table in the matches table at step 6, but it didn't find it (most likely because it was canceled), which led to
+a crash.
+
 0.6.4 alpha:
 - Fixed a bug where a match with the "Teams unknown" status was canceled, causing the parser to crash when trying to update it.
 
@@ -349,6 +353,10 @@ Current_team will not be changed.
 - It happens that a player moves to another team, but on the HLTV side information about him is not updated. The parser does not take consider such cases.
 
 Русский:
+
+0.6.5 alpha:
+- Исправлен баг, когда на 6 шаге парсер пытался найти матч из таблицы dump в таблице matches, но не нашёл (скорее всего потому что был отменён), что приводило к 
+падению.
 
 0.6.4 alpha:
 - Исправлен баг, когда матч со статусом "Teams unknown" был отменён, отчего парсер при попытке обновить его падал.

@@ -117,7 +117,7 @@ class Parcer(Program):
                 else:
                     raise ParcerException('Database corrupted, but user cancelled creating new database.')
             else:
-                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.3 alpha.')
+                self.log_and_print('This is a parcer for collecting statistics about teams and players on upcoming matches in CS:GO from hltv.org. Current version: 0.6.5 alpha.')
                 run_parcer = self.question('Start parcer? (Y/n): ')
                 if not run_parcer:
                     raise ParcerException('Start cancelled.')
@@ -277,16 +277,23 @@ class Parcer(Program):
         cols = ('id', 'title', 'team_1_id', 'team_2_id', 'team_1_players_ids', 'team_2_players_ids', 'date', 'tournament', 'format', 'maps', 'status', 'result')
         if dumped_upcoming_matches:
             for match in dumped_upcoming_matches:
-                current_match = self.DB.get_upcoming_match(match[0])
-                if match[:12] != current_match[:12]:
-                    self.log_and_print('Updating match "{}" info...'.format(match[1]))
-                    for i in range(1, 12):
-                        if match[i] != current_match[i]:
-                            self.DB.update_dump_value(match[0], cols[i], current_match[i])
-                            self.log_and_print('Data "{}" updated from "{}" to "{}"'.format(cols[i], str(match[i]), str(current_match[i])))
-                            if i in (2, 3, 4, 5):
-                                self.log_and_print('WARNING! Changed critical data! Stats shoud be updated!')
-                Program.loading_progress['loading_points'] += 1
+                try:
+                    current_match = self.DB.get_upcoming_match(match[0])
+                except DatabaseException as e:
+                    if 'not found' in str(e):
+                        self.log_and_print('Match with ID {} not founded. Maybe it cancelled?'.format(str(match[0])))
+                        self.log_and_print('WARNING! This match will be DELETED from dump table!')
+                        self.DB.delete_data('dump', match[0])
+                else:
+                    if match[:12] != current_match[:12]:
+                        self.log_and_print('Updating match "{}" info...'.format(match[1]))
+                        for i in range(1, 12):
+                            if match[i] != current_match[i]:
+                                self.DB.update_dump_value(match[0], cols[i], current_match[i])
+                                self.log_and_print('Data "{}" updated from "{}" to "{}"'.format(cols[i], str(match[i]), str(current_match[i])))
+                                if i in (2, 3, 4, 5):
+                                    self.log_and_print('WARNING! Changed critical data! Stats shoud be updated!')
+                    Program.loading_progress['loading_points'] += 1
         if new_upcoming_matches:
             for match in new_upcoming_matches:
                 data = list(match[:12])
